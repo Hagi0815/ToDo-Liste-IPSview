@@ -30,7 +30,7 @@
     {
       "type": "CheckBox",
       "name": "DarkMode",
-      "caption": "Dunkles Design (aus = hell)"
+      "caption": "Dunkles Design"
     }
   ],
   "actions": [
