@@ -41,9 +41,12 @@ class TaskManager extends IPSModuleStrict
 
     public function RequestAction(string $Ident, mixed $Value): void
     {
+        IPS_LogMessage('TaskManager', 'RequestAction aufgerufen: Ident=' . $Ident . ' Value=' . print_r($Value, true));
         switch ($Ident) {
             case 'AddTask':
-                $this->AddTask($this->Decode($Value));
+                $data = $this->Decode($Value);
+                IPS_LogMessage('TaskManager', 'AddTask Decoded: ' . print_r($data, true));
+                $this->AddTask($data);
                 break;
             case 'UpdateTask':
                 $this->UpdateTask($this->Decode($Value));
@@ -61,6 +64,7 @@ class TaskManager extends IPSModuleStrict
                 throw new RuntimeException('Unbekannte Aktion: ' . $Ident);
         }
         $this->Refresh();
+        IPS_LogMessage('TaskManager', 'Refresh abgeschlossen nach: ' . $Ident);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -355,19 +359,26 @@ class TaskManager extends IPSModuleStrict
   var IID = ' . $Iid . ';
 
   function ipsAction(ident, value) {
-    var payload = typeof value === "string" ? value : JSON.stringify(value);
-    try {
-      IPS_RequestAction(IID, ident, payload);
-    } catch(e) {
-      fetch("/api/", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          jsonrpc:"2.0", method:"IPS_RequestAction",
-          params:[IID, ident, payload], id:1
-        })
-      }).catch(function(){});
-    }
+    var payload = JSON.stringify(value);
+    fetch("/api/", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "IPS_RequestAction",
+        params: [IID, ident, payload],
+        id: Date.now()
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) {
+        alert("Fehler: " + JSON.stringify(data.error));
+      }
+    })
+    .catch(function(e) {
+      alert("Verbindungsfehler: " + e);
+    });
   }
 
   window.tmToggle = function(id, done) {
@@ -375,9 +386,7 @@ class TaskManager extends IPSModuleStrict
   };
 
   window.tmDelete = function(id) {
-    if (confirm("Aufgabe löschen?")) {
-      ipsAction("DeleteTask", {id: id});
-    }
+    ipsAction("DeleteTask", {id: id});
   };
 
   window.tmOpenAdd = function() {
@@ -390,7 +399,7 @@ class TaskManager extends IPSModuleStrict
     document.getElementById("tm-modal-title").textContent = "Neue Aufgabe";
     document.getElementById("tm-modal").classList.add("open");
     document.getElementById("tm-modal-backdrop").classList.add("open");
-    setTimeout(function(){ document.getElementById("tm-f-title").focus(); }, 50);
+    setTimeout(function(){ document.getElementById("tm-f-title").focus(); }, 80);
   };
 
   window.tmOpenEdit = function(data) {
@@ -401,7 +410,7 @@ class TaskManager extends IPSModuleStrict
     document.getElementById("tm-f-prio").value = d.priority || "normal";
     if (d.due && d.due > 0) {
       var dt = new Date(d.due * 1000);
-      var pad = function(n){ return String(n).padStart(2,"0"); };
+      var pad = function(n){ return String(n).padStart(2, "0"); };
       document.getElementById("tm-f-due").value =
         dt.getFullYear() + "-" + pad(dt.getMonth()+1) + "-" + pad(dt.getDate()) +
         "T" + pad(dt.getHours()) + ":" + pad(dt.getMinutes());
@@ -412,7 +421,7 @@ class TaskManager extends IPSModuleStrict
     document.getElementById("tm-modal-title").textContent = "Aufgabe bearbeiten";
     document.getElementById("tm-modal").classList.add("open");
     document.getElementById("tm-modal-backdrop").classList.add("open");
-    setTimeout(function(){ document.getElementById("tm-f-title").focus(); }, 50);
+    setTimeout(function(){ document.getElementById("tm-f-title").focus(); }, 80);
   };
 
   window.tmCloseModal = function() {
@@ -422,17 +431,22 @@ class TaskManager extends IPSModuleStrict
 
   window.tmSaveModal = function() {
     var title = document.getElementById("tm-f-title").value.trim();
-    if (!title) { document.getElementById("tm-f-title").focus(); return; }
-    var info  = document.getElementById("tm-f-info").value.trim();
-    var prio  = document.getElementById("tm-f-prio").value;
-    var dueRaw= document.getElementById("tm-f-due").value;
-    var due   = 0;
+    if (!title) {
+      document.getElementById("tm-f-title").style.borderColor = "red";
+      document.getElementById("tm-f-title").focus();
+      return;
+    }
+    document.getElementById("tm-f-title").style.borderColor = "";
+    var info   = document.getElementById("tm-f-info").value.trim();
+    var prio   = document.getElementById("tm-f-prio").value;
+    var dueRaw = document.getElementById("tm-f-due").value;
+    var due    = 0;
     if (dueRaw) {
       due = Math.floor(new Date(dueRaw).getTime() / 1000);
     }
     var editId = document.getElementById("tm-edit-id").value;
     if (editId) {
-      ipsAction("UpdateTask", {id: parseInt(editId), title: title, info: info, priority: prio, due: due});
+      ipsAction("UpdateTask", {id: parseInt(editId, 10), title: title, info: info, priority: prio, due: due});
     } else {
       ipsAction("AddTask", {title: title, info: info, priority: prio, due: due});
     }
@@ -442,17 +456,16 @@ class TaskManager extends IPSModuleStrict
   window.tmDeleteFromModal = function() {
     var editId = document.getElementById("tm-edit-id").value;
     if (!editId) return;
-    if (confirm("Aufgabe löschen?")) {
-      ipsAction("DeleteTask", {id: parseInt(editId)});
-      tmCloseModal();
-    }
+    ipsAction("DeleteTask", {id: parseInt(editId, 10)});
+    tmCloseModal();
   };
 
-  // Enter-Taste im Titel-Feld
   document.addEventListener("keydown", function(e) {
-    if (e.key === "Enter" && document.getElementById("tm-modal").classList.contains("open")) {
+    var modal = document.getElementById("tm-modal");
+    if (!modal || !modal.classList.contains("open")) return;
+    if (e.key === "Enter") {
       var active = document.activeElement;
-      if (active && active.id !== "tm-f-info") {
+      if (active && active.tagName !== "TEXTAREA") {
         e.preventDefault();
         tmSaveModal();
       }
@@ -461,9 +474,11 @@ class TaskManager extends IPSModuleStrict
       tmCloseModal();
     }
   });
+
 })();
 </script>';
     }
+
 
     private function BuildCss(bool $Dark): string
     {
