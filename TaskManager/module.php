@@ -354,13 +354,31 @@ class TaskManager extends IPSModuleStrict
 
     private function BuildJs(int $Iid): string
     {
+        // Korrekten WebServer-Port ermitteln
+        $port = 3777; // IPS Standard-Port
+        try {
+            $serverConfig = json_decode(IPS_GetConfiguration(IPS_GetInstanceIDByIdent('WebServer', 0) ?: 0), true);
+            if (isset($serverConfig['Port'])) {
+                $port = (int)$serverConfig['Port'];
+            }
+        } catch (\Throwable $e) {
+            // Standard-Port beibehalten
+        }
+
         return '<script>
 (function() {
   var IID = ' . $Iid . ';
+  var API_PORT = ' . $port . ';
+
+  // IPS JSON-RPC API URL – Port wird serverseitig eingebettet
+  function getApiUrl() {
+    return location.protocol + "//" + location.hostname + ":" + API_PORT + "/api/";
+  }
 
   function ipsAction(ident, value) {
     var payload = JSON.stringify(value);
-    fetch("/api/", {
+    var url = getApiUrl();
+    fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
@@ -373,11 +391,22 @@ class TaskManager extends IPSModuleStrict
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data && data.error) {
-        alert("Fehler: " + JSON.stringify(data.error));
+        console.error("IPS Fehler:", JSON.stringify(data.error));
       }
     })
     .catch(function(e) {
-      alert("Verbindungsfehler: " + e);
+      console.error("Verbindungsfehler:", e);
+      // Fallback: aktuellen Port versuchen
+      fetch(location.protocol + "//" + location.host + "/api/", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "IPS_RequestAction",
+          params: [IID, ident, payload],
+          id: Date.now()
+        })
+      }).catch(function(e2){ console.error("Auch Fallback fehlgeschlagen:", e2); });
     });
   }
 
