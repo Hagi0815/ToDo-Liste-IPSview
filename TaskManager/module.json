@@ -1,0 +1,15 @@
+{
+  "id": "{B7D4E1F3-9C2A-4B8D-A5E6-3F0C7D9E1A2B}",
+  "name": "Task Manager",
+  "type": 3,
+  "vendor": "",
+  "aliases": [
+    "Task Manager",
+    "TaskManager"
+  ],
+  "url": "",
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": [],
+  "prefix": "TM"
+}
