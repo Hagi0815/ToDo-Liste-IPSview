@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 class TaskManager extends IPSModule
 {
-    public function Create(): void
+    public function Create()
     {
         parent::Create();
 
@@ -19,74 +19,44 @@ class TaskManager extends IPSModule
 
         $this->RegisterVariableString('TaskListHtml', 'Aufgabenliste', '~HTMLBox', 1);
         $this->RegisterVariableInteger('OpenTasks', 'Offene Aufgaben', '', 2);
-        $this->RegisterVariableInteger('OverdueTasks', 'Überfällig', '', 3);
+        $this->RegisterVariableInteger('OverdueTasks', 'Ueberfaellig', '', 3);
     }
 
-    public function ApplyChanges(): void
+    public function ApplyChanges()
     {
         parent::ApplyChanges();
-        $this->RegisterHook('/hook/taskmanager_' . $this->InstanceID);
         $this->Refresh();
     }
 
-    // WebHook empfängt POST-Requests aus der HTMLBox
-    public function ProcessHookData(): void
+    public function RequestAction($Ident, $Value)
     {
-        header('Content-Type: application/json; charset=utf-8');
-        header('Access-Control-Allow-Origin: *');
-        header('Access-Control-Allow-Methods: POST, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type');
-
-        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            http_response_code(204);
-            echo '';
-            return;
+        $data = json_decode($Value, true);
+        if (!is_array($data)) {
+            $data = [];
         }
 
-        $raw  = file_get_contents('php://input');
-        $data = json_decode($raw ?: '', true);
-
-        if (!is_array($data) || empty($data['action'])) {
-            http_response_code(400);
-            echo json_encode(['ok' => false, 'error' => 'Ungueltige Anfrage']);
-            return;
+        switch ($Ident) {
+            case 'AddTask':
+                $this->AddTask($data);
+                break;
+            case 'UpdateTask':
+                $this->UpdateTask($data);
+                break;
+            case 'ToggleDone':
+                $this->ToggleDone($data);
+                break;
+            case 'DeleteTask':
+                $this->DeleteTask($data);
+                break;
+            case 'DeleteAllCompleted':
+                $this->DeleteAllCompleted();
+                break;
+            default:
+                throw new Exception('Unbekannte Aktion: ' . $Ident);
         }
-
-        $action  = (string)$data['action'];
-        $payload = isset($data['payload']) && is_array($data['payload']) ? $data['payload'] : [];
-
-        try {
-            switch ($action) {
-                case 'AddTask':
-                    $this->AddTask($payload);
-                    break;
-                case 'UpdateTask':
-                    $this->UpdateTask($payload);
-                    break;
-                case 'ToggleDone':
-                    $this->ToggleDone($payload);
-                    break;
-                case 'DeleteTask':
-                    $this->DeleteTask($payload);
-                    break;
-                case 'DeleteAllCompleted':
-                    $this->DeleteAllCompleted();
-                    break;
-                default:
-                    http_response_code(400);
-                    echo json_encode(['ok' => false, 'error' => 'Unbekannte Aktion']);
-                    return;
-            }
-            $this->Refresh();
-            echo json_encode(['ok' => true]);
-        } catch (Exception $e) {
-            IPS_LogMessage('TaskManager', 'Fehler: ' . $e->getMessage());
-            http_response_code(500);
-            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
-        }
+        $this->Refresh();
     }
 
-    // Öffentliche Methode für Skripte
     public function TM_AddTask(string $Title, string $Info = '', string $Priority = 'normal', int $Due = 0): int
     {
         $id = $this->AddTask(['title' => $Title, 'info' => $Info, 'priority' => $Priority, 'due' => $Due]);
@@ -94,13 +64,13 @@ class TaskManager extends IPSModule
         return $id;
     }
 
-    public function TM_DeleteAllCompleted(): void
+    public function TM_DeleteAllCompleted()
     {
         $this->DeleteAllCompleted();
         $this->Refresh();
     }
 
-    // ── CRUD ─────────────────────────────────────────────────────────────────
+    // ── CRUD ──────────────────────────────────────────────────────────────────
 
     private function AddTask(array $Data): int
     {
@@ -122,7 +92,7 @@ class TaskManager extends IPSModule
         return $id;
     }
 
-    private function UpdateTask(array $Data): void
+    private function UpdateTask(array $Data)
     {
         $id    = (int)($Data['id'] ?? 0);
         $tasks = $this->LoadTasks();
@@ -138,7 +108,7 @@ class TaskManager extends IPSModule
         $this->SaveTasks($tasks);
     }
 
-    private function ToggleDone(array $Data): void
+    private function ToggleDone(array $Data)
     {
         $id    = (int)($Data['id'] ?? 0);
         $done  = (bool)($Data['done'] ?? false);
@@ -157,36 +127,46 @@ class TaskManager extends IPSModule
         $this->SaveTasks($tasks);
     }
 
-    private function DeleteTask(array $Data): void
+    private function DeleteTask(array $Data)
     {
         $id    = (int)($Data['id'] ?? 0);
-        $tasks = array_values(array_filter($this->LoadTasks(), function ($t) use ($id) {
-            return (int)$t['id'] !== $id;
-        }));
+        $tasks = [];
+        foreach ($this->LoadTasks() as $t) {
+            if ((int)$t['id'] !== $id) {
+                $tasks[] = $t;
+            }
+        }
         $this->SaveTasks($tasks);
     }
 
-    private function DeleteAllCompleted(): void
+    private function DeleteAllCompleted()
     {
-        $tasks = array_values(array_filter($this->LoadTasks(), function ($t) {
-            return empty($t['done']);
-        }));
+        $tasks = [];
+        foreach ($this->LoadTasks() as $t) {
+            if (empty($t['done'])) {
+                $tasks[] = $t;
+            }
+        }
         $this->SaveTasks($tasks);
     }
 
     // ── Refresh ───────────────────────────────────────────────────────────────
 
-    private function Refresh(): void
+    private function Refresh()
     {
         $tasks   = $this->LoadTasks();
         $now     = time();
         $open    = 0;
         $overdue = 0;
         foreach ($tasks as $t) {
-            if (!empty($t['done'])) continue;
+            if (!empty($t['done'])) {
+                continue;
+            }
             $open++;
             $due = (int)($t['due'] ?? 0);
-            if ($due > 0 && $due < $now) $overdue++;
+            if ($due > 0 && $due < $now) {
+                $overdue++;
+            }
         }
         $this->SetValue('OpenTasks', $open);
         $this->SetValue('OverdueTasks', $overdue);
@@ -198,23 +178,31 @@ class TaskManager extends IPSModule
     private function BuildHtml(array $Tasks): string
     {
         $iid       = $this->InstanceID;
-        $hookUrl   = '/hook/taskmanager_' . $iid;
-        $dark      = $this->ReadPropertyBoolean('DarkMode');
-        $showStats = $this->ReadPropertyBoolean('ShowStats');
-        $showPrio  = $this->ReadPropertyBoolean('ShowPriority');
-        $showDue   = $this->ReadPropertyBoolean('ShowDueDate');
+        $dark      = (bool)$this->ReadPropertyBoolean('DarkMode');
+        $showStats = (bool)$this->ReadPropertyBoolean('ShowStats');
+        $showPrio  = (bool)$this->ReadPropertyBoolean('ShowPriority');
+        $showDue   = (bool)$this->ReadPropertyBoolean('ShowDueDate');
         $maxDone   = (int)$this->ReadPropertyInteger('MaxCompletedVisible');
 
         $open = [];
         $done = [];
         foreach ($Tasks as $t) {
-            if (!empty($t['done'])) $done[] = $t;
-            else $open[] = $t;
+            if (!empty($t['done'])) {
+                $done[] = $t;
+            } else {
+                $open[] = $t;
+            }
         }
 
-        usort($open, function ($a, $b) { return $this->SortScore($a) - $this->SortScore($b); });
-        usort($done, function ($a, $b) { return (int)($b['completedAt'] ?? 0) - (int)($a['completedAt'] ?? 0); });
-        if ($maxDone > 0) $done = array_slice($done, 0, $maxDone);
+        usort($open, function ($a, $b) {
+            return $this->SortScore($a) - $this->SortScore($b);
+        });
+        usort($done, function ($a, $b) {
+            return (int)($b['completedAt'] ?? 0) - (int)($a['completedAt'] ?? 0);
+        });
+        if ($maxDone > 0) {
+            $done = array_slice($done, 0, $maxDone);
+        }
 
         $now    = time();
         $todayS = mktime(0, 0, 0);
@@ -225,8 +213,12 @@ class TaskManager extends IPSModule
         $totalToday   = 0;
         foreach ($open as $t) {
             $due = (int)($t['due'] ?? 0);
-            if ($due > 0 && $due < $now) $totalOverdue++;
-            if ($due >= $todayS && $due <= $todayE) $totalToday++;
+            if ($due > 0 && $due < $now) {
+                $totalOverdue++;
+            }
+            if ($due >= $todayS && $due <= $todayE) {
+                $totalToday++;
+            }
         }
 
         $body = '';
@@ -239,7 +231,7 @@ class TaskManager extends IPSModule
                 . '</div>';
         }
 
-        $body .= $this->BuildFormHtml();
+        $body .= $this->BuildFormHtml($iid);
 
         foreach ($open as $t) {
             $body .= $this->BuildRow($t, $showPrio, $showDue, $now, $todayS, $todayE);
@@ -255,11 +247,11 @@ class TaskManager extends IPSModule
         }
 
         return '<style>' . $this->BuildCss($dark) . '</style>'
-             . $this->BuildJs($hookUrl)
-             . '<div class="tm-wrap">' . $body . '</div>';
+            . $this->BuildJs($iid)
+            . '<div class="tm-wrap">' . $body . '</div>';
     }
 
-    private function BuildFormHtml(): string
+    private function BuildFormHtml(int $iid): string
     {
         return '
 <div class="tm-add-bar">
@@ -295,7 +287,7 @@ class TaskManager extends IPSModule
         <input class="tm-input" id="tm-f-due" type="datetime-local" />
       </div>
     </div>
-    <div id="tm-status" style="font-size:12px;min-height:18px;color:red;"></div>
+    <div id="tm-status" style="font-size:12px;min-height:18px;color:red;margin-top:4px;"></div>
   </div>
   <div class="tm-modal-footer">
     <button class="tm-btn tm-btn-danger" id="tm-del-btn" onclick="tmDeleteFromModal()" style="display:none">L&#246;schen</button>
@@ -314,19 +306,24 @@ class TaskManager extends IPSModule
         $prio  = (string)($T['priority'] ?? 'normal');
         $dueTs = (int)($T['due'] ?? 0);
 
-        $chk = '<input type="checkbox" class="tm-chk" ' . ($done ? 'checked' : '') . ' onchange="tmToggle(' . $id . ', this.checked)" />';
+        $chk = '<input type="checkbox" class="tm-chk" '
+            . ($done ? 'checked' : '')
+            . ' onchange="tmToggle(' . $id . ', this.checked)" />';
 
         $infoHtml = $info !== '' ? '<div class="tm-info">' . $info . '</div>' : '';
 
         $badges = '';
         if ($ShowPrio) {
-            $pl = ['low' => 'Niedrig', 'normal' => 'Normal', 'high' => 'Hoch'];
+            $pl     = ['low' => 'Niedrig', 'normal' => 'Normal', 'high' => 'Hoch'];
             $badges .= '<span class="tm-badge tm-badge-' . $prio . '">' . ($pl[$prio] ?? 'Normal') . '</span>';
         }
         if ($ShowDue && $dueTs > 0) {
             $dc = '';
-            if ($dueTs < $Now) $dc = ' tm-due-overdue';
-            elseif ($dueTs <= $TodayE) $dc = ' tm-due-today';
+            if ($dueTs < $Now) {
+                $dc = ' tm-due-overdue';
+            } elseif ($dueTs <= $TodayE) {
+                $dc = ' tm-due-today';
+            }
             $badges .= '<span class="tm-badge tm-due-badge' . $dc . '">&#128197; ' . date('d.m.Y H:i', $dueTs) . '</span>';
         }
 
@@ -343,40 +340,73 @@ class TaskManager extends IPSModule
   <div class="tm-item-left">' . $chk . '<span class="tm-prio-dot tm-prio-' . $prio . '"></span></div>
   <div class="tm-item-body" onclick="tmOpenEdit(\'' . $editJson . '\')">
     <div class="tm-title">' . $title . '</div>' . $infoHtml
-    . ($badges !== '' ? '<div class="tm-badges">' . $badges . '</div>' : '') . '
+            . ($badges !== '' ? '<div class="tm-badges">' . $badges . '</div>' : '') . '
   </div>
   <button class="tm-item-del" onclick="event.stopPropagation();tmDelete(' . $id . ')">&#x2715;</button>
 </div>';
     }
 
-    private function BuildJs(string $HookUrl): string
+    private function BuildJs(int $Iid): string
     {
+        // IPS_RequestAction wird direkt über den IPS WebFront JS-Kontext aufgerufen.
+        // In IPS View / HTMLBox steht window.IPS zur Verfügung.
         return '<script>
 (function() {
-  var HOOK = "' . addslashes($HookUrl) . '";
+  var IID = ' . $Iid . ';
 
-  function tmAction(action, payload, btn) {
-    if (btn) btn.disabled = true;
+  // Universelle Aktion: versucht alle bekannten IPS-Wege
+  function tmSend(ident, payload) {
+    var value = JSON.stringify(payload);
     var st = document.getElementById("tm-status");
-    if (st) st.textContent = "";
-    fetch(HOOK, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({action: action, payload: payload || {}})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (btn) btn.disabled = false;
-      if (!d.ok && st) st.textContent = "Fehler: " + (d.error || "");
-    })
-    .catch(function(e) {
-      if (btn) btn.disabled = false;
-      if (st) st.textContent = "Fehler: " + e;
-    });
+
+    // Weg 1: IPS WebFront nativer Aufruf
+    if (typeof IPS !== "undefined" && IPS.requestAction) {
+      try { IPS.requestAction(IID, ident, value); return; } catch(e) {}
+    }
+
+    // Weg 2: window.sendRequest (ältere IPS-Versionen)
+    if (typeof sendRequest !== "undefined") {
+      try { sendRequest("RequestAction", {instanceID: IID, ident: ident, value: value}); return; } catch(e) {}
+    }
+
+    // Weg 3: JSON-RPC über aktuellen Host+Port (funktioniert bei ipmagic)
+    var urls = [
+      location.origin + "/api/",
+      location.protocol + "//" + location.hostname + ":3777/api/",
+      location.protocol + "//" + location.hostname + ":82/api/"
+    ];
+
+    function tryUrl(idx) {
+      if (idx >= urls.length) {
+        if (st) st.textContent = "Verbindung fehlgeschlagen";
+        return;
+      }
+      fetch(urls[idx], {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({jsonrpc: "2.0", method: "IPS_RequestAction", params: [IID, ident, value], id: 1})
+      })
+      .then(function(r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function(d) {
+        if (d && d.error && st) {
+          st.textContent = "Fehler: " + JSON.stringify(d.error);
+        }
+      })
+      .catch(function() { tryUrl(idx + 1); });
+    }
+    tryUrl(0);
   }
 
-  window.tmToggle = function(id, done) { tmAction("ToggleDone", {id:id, done:done}); };
-  window.tmDelete = function(id) { tmAction("DeleteTask", {id:id}); };
+  window.tmToggle = function(id, done) {
+    tmSend("ToggleDone", {id: id, done: done});
+  };
+
+  window.tmDelete = function(id) {
+    tmSend("DeleteTask", {id: id});
+  };
 
   window.tmOpenAdd = function() {
     document.getElementById("tm-edit-id").value = "";
@@ -393,14 +423,18 @@ class TaskManager extends IPSModule
   };
 
   window.tmOpenEdit = function(s) {
-    var d; try { d = JSON.parse(s); } catch(e) { return; }
+    var d;
+    try { d = JSON.parse(s); } catch(e) { return; }
     document.getElementById("tm-edit-id").value = d.id || "";
     document.getElementById("tm-f-title").value = d.title || "";
     document.getElementById("tm-f-info").value = d.info || "";
     document.getElementById("tm-f-prio").value = d.priority || "normal";
     if (d.due > 0) {
-      var dt = new Date(d.due * 1000), pad = function(n){return String(n).padStart(2,"0");};
-      document.getElementById("tm-f-due").value = dt.getFullYear()+"-"+pad(dt.getMonth()+1)+"-"+pad(dt.getDate())+"T"+pad(dt.getHours())+":"+pad(dt.getMinutes());
+      var dt = new Date(d.due * 1000);
+      var pad = function(n) { return String(n).padStart(2, "0"); };
+      document.getElementById("tm-f-due").value =
+        dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate()) +
+        "T" + pad(dt.getHours()) + ":" + pad(dt.getMinutes());
     } else {
       document.getElementById("tm-f-due").value = "";
     }
@@ -419,32 +453,41 @@ class TaskManager extends IPSModule
 
   window.tmSaveModal = function() {
     var title = document.getElementById("tm-f-title").value.trim();
-    if (!title) { document.getElementById("tm-f-title").style.borderColor="#ff5a5a"; document.getElementById("tm-f-title").focus(); return; }
+    if (!title) {
+      document.getElementById("tm-f-title").style.borderColor = "#ff5a5a";
+      document.getElementById("tm-f-title").focus();
+      return;
+    }
     document.getElementById("tm-f-title").style.borderColor = "";
-    var info = document.getElementById("tm-f-info").value.trim();
-    var prio = document.getElementById("tm-f-prio").value;
+    var info   = document.getElementById("tm-f-info").value.trim();
+    var prio   = document.getElementById("tm-f-prio").value;
     var dueRaw = document.getElementById("tm-f-due").value;
-    var due = dueRaw ? Math.floor(new Date(dueRaw).getTime()/1000) : 0;
+    var due    = dueRaw ? Math.floor(new Date(dueRaw).getTime() / 1000) : 0;
     var editId = document.getElementById("tm-edit-id").value;
-    var btn = document.getElementById("tm-save-btn");
     if (editId) {
-      tmAction("UpdateTask", {id:parseInt(editId,10), title:title, info:info, priority:prio, due:due}, btn);
+      tmSend("UpdateTask", {id: parseInt(editId, 10), title: title, info: info, priority: prio, due: due});
     } else {
-      tmAction("AddTask", {title:title, info:info, priority:prio, due:due}, btn);
+      tmSend("AddTask", {title: title, info: info, priority: prio, due: due});
     }
     tmCloseModal();
   };
 
   window.tmDeleteFromModal = function() {
     var editId = document.getElementById("tm-edit-id").value;
-    if (editId) { tmAction("DeleteTask", {id:parseInt(editId,10)}); tmCloseModal(); }
+    if (editId) {
+      tmSend("DeleteTask", {id: parseInt(editId, 10)});
+      tmCloseModal();
+    }
   };
 
   document.addEventListener("keydown", function(e) {
     var m = document.getElementById("tm-modal");
     if (!m || !m.classList.contains("open")) return;
-    if (e.key === "Enter" && document.activeElement && document.activeElement.tagName !== "TEXTAREA") { e.preventDefault(); tmSaveModal(); }
-    if (e.key === "Escape") tmCloseModal();
+    if (e.key === "Enter" && document.activeElement && document.activeElement.tagName !== "TEXTAREA") {
+      e.preventDefault();
+      tmSaveModal();
+    }
+    if (e.key === "Escape") { tmCloseModal(); }
   });
 })();
 </script>';
@@ -457,6 +500,7 @@ class TaskManager extends IPSModule
         } else {
             $v = '--bg:#f4f5f7;--card:#fff;--text:#1a1a2e;--muted:rgba(26,26,46,.45);--border:rgba(0,0,0,.10);--accent:#00897b;--red:#d32f2f;--orange:#e65100;--shadow:rgba(0,0,0,.12);--modal:#fff;--inp:#f4f5f7;--overlay:rgba(0,0,0,.40);';
         }
+
         return '.tm-wrap{' . $v . 'display:flex;flex-direction:column;gap:8px;font-family:"Segoe UI",system-ui,sans-serif;font-size:14px;color:var(--text);}
 .tm-stats{display:flex;gap:8px;margin-bottom:4px;}
 .tm-stat{flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 6px;text-align:center;}
@@ -518,7 +562,7 @@ class TaskManager extends IPSModule
         return is_array($data) ? $data : [];
     }
 
-    private function SaveTasks(array $Tasks): void
+    private function SaveTasks(array $Tasks)
     {
         $this->WriteAttributeString('Tasks', json_encode(array_values($Tasks), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
@@ -530,32 +574,9 @@ class TaskManager extends IPSModule
 
     private function SortScore(array $T): int
     {
-        $p   = ['high' => 0, 'normal' => 1000, 'low' => 2000];
-        $s   = isset($p[$T['priority']]) ? $p[$T['priority']] : 1000;
+        $map = ['high' => 0, 'normal' => 1000, 'low' => 2000];
+        $s   = isset($map[$T['priority']]) ? $map[$T['priority']] : 1000;
         $due = (int)($T['due'] ?? 0);
         return $due > 0 ? $s + ($due % 100000) : $s + 99999;
-    }
-
-    private function RegisterHook(string $WebHookURI): void
-    {
-        // WebHook Control Modul-ID in IPS
-        $ids = IPS_GetInstanceListByModuleID('{015A6EB8-D6E5-4B93-B496-0D3F77AE9FE1}');
-        if (empty($ids)) {
-            IPS_LogMessage('TaskManager', 'WebHook-Control nicht gefunden!');
-            return;
-        }
-        $id    = $ids[0];
-        $hooks = json_decode(IPS_GetProperty($id, 'Hooks'), true);
-        if (!is_array($hooks)) $hooks = [];
-
-        foreach ($hooks as $hook) {
-            if ($hook['Hook'] === $WebHookURI) {
-                if ((int)$hook['TargetID'] === $this->InstanceID) return;
-            }
-        }
-
-        $hooks[] = ['Hook' => $WebHookURI, 'TargetID' => $this->InstanceID];
-        IPS_SetProperty($id, 'Hooks', json_encode($hooks));
-        IPS_ApplyChanges($id);
     }
 }
