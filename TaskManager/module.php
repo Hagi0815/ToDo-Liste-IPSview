@@ -184,7 +184,21 @@ class TaskManager extends IPSModule
     {
         $iid     = $this->InstanceID;
         $dark    = (bool)$this->ReadPropertyBoolean('DarkMode');
-        $hook    = '/hook/taskmanager_' . $iid;
+        // Vollstaendige Hook-URL ermitteln fuer IPS View Kompatibilitaet
+        $hook = '/hook/taskmanager_' . $iid;
+        $fullHook = $hook;
+        // Versuche Connect-URL zu ermitteln
+        try {
+            $connectIds = IPS_GetInstanceListByModuleID('{9486D575-BE8C-4ED8-B5B5-20930D26F0B3}');
+            if (!empty($connectIds)) {
+                $connectUrl = CC_GetURL($connectIds[0]);
+                if (!empty($connectUrl)) {
+                    $fullHook = rtrim($connectUrl, '/') . $hook;
+                }
+            }
+        } catch (Exception $e) {
+            // Fallback auf relativen Pfad
+        }
         $now     = time();
         $todayE  = mktime(23, 59, 59);
 
@@ -231,7 +245,7 @@ class TaskManager extends IPSModule
         $muted = $dark ? 'rgba(240,240,240,.4)' : 'rgba(26,26,46,.4)';
         $bord  = $dark ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.09)';
         $acc   = $dark ? '#00cdab' : '#00897b';
-        $red   = $dark ? '#e00000' : '#d32f2f';
+        $red   = $dark ? '#e00000' : '#cc0000';
         $ora   = $dark ? '#ffaa40' : '#e65100';
         $inp   = $dark ? '#14151a' : '#f0f2f5';
         $ov2   = $dark ? 'rgba(0,0,0,.7)' : 'rgba(0,0,0,.4)';
@@ -256,10 +270,10 @@ class TaskManager extends IPSModule
             . '.info{font-size:12px;color:' . $muted . ';margin-top:2px;line-height:1.4}'
             . '.badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}'
             . '.badge{font-size:11px;padding:2px 7px;border-radius:999px;border:1px solid ' . $bord . ';color:' . $muted . '}'
-            . '.p-h{border-color:' . $red . ';color:' . $red . ';background:rgba(255,90,90,.12)}'
+            . '.p-h{border-color:' . $red . ';color:' . $red . ';background:rgba(220,0,0,.18)}'
             . '.p-n{border-color:' . $acc . ';color:' . $acc . ';background:rgba(0,205,171,.12)}'
             . '.p-l{border-color:' . $muted . ';color:' . $muted . '}'
-            . '.due-ov{border-color:' . $red . ';color:' . $red . ';background:rgba(255,90,90,.12)}'
+            . '.due-ov{border-color:' . $red . ';color:' . $red . ';background:rgba(220,0,0,.18)}'
             . '.due-td{border-color:' . $ora . ';color:' . $ora . ';background:rgba(255,170,64,.12)}'
             . '.del{flex-shrink:0;background:transparent;border:none;color:' . $muted . ';cursor:pointer;font-size:13px;padding:2px 3px;border-radius:5px}'
             . '.divider{font-size:11px;font-weight:700;text-transform:uppercase;color:' . $muted . ';padding:6px 2px 2px}'
