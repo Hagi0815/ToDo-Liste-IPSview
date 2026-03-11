@@ -25,6 +25,14 @@ class TaskManager extends IPSModule
 
     public function ProcessHookData()
     {
+        // GET: vollstaendige HTML-Seite ausliefern (fuer IPS View HTMLBox als src=URL)
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            header('Content-Type: text/html; charset=utf-8');
+            header('Access-Control-Allow-Origin: *');
+            echo $this->BuildHtml($this->LoadTasks());
+            return;
+        }
+
         header('Content-Type: application/json');
         header('Access-Control-Allow-Origin: *');
         header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -162,6 +170,22 @@ class TaskManager extends IPSModule
         $this->SaveTasks($result);
     }
 
+
+    private function GetHookUrl()
+    {
+        $hook = '/hook/taskmanager_' . $this->InstanceID;
+        try {
+            $connectIds = IPS_GetInstanceListByModuleID('{9486D575-BE8C-4ED8-B5B5-20930D26F0B3}');
+            if (!empty($connectIds)) {
+                $connectUrl = CC_GetURL($connectIds[0]);
+                if (!empty($connectUrl)) {
+                    return rtrim($connectUrl, '/') . $hook;
+                }
+            }
+        } catch (Exception $e) {}
+        return $hook;
+    }
+
     private function Refresh()
     {
         $tasks = $this->LoadTasks();
@@ -177,28 +201,16 @@ class TaskManager extends IPSModule
         $this->SetValue('TasksJson', json_encode($tasks));
         $this->SetValue('OpenTasks', $open);
         $this->SetValue('OverdueTasks', $overdue);
-        $this->SetValue('HtmlBox', $this->BuildHtml($tasks));
+        $hookUrl = $this->GetHookUrl();
+        $iframe = '<iframe src="' . $hookUrl . '" style="width:100%;height:100%;border:none;min-height:600px;" frameborder="0"></iframe>';
+        $this->SetValue('HtmlBox', $iframe);
     }
 
     private function BuildHtml($tasks)
     {
         $iid     = $this->InstanceID;
         $dark    = (bool)$this->ReadPropertyBoolean('DarkMode');
-        // Vollstaendige Hook-URL ermitteln fuer IPS View Kompatibilitaet
-        $hook = '/hook/taskmanager_' . $iid;
-        $fullHook = $hook;
-        // Versuche Connect-URL zu ermitteln
-        try {
-            $connectIds = IPS_GetInstanceListByModuleID('{9486D575-BE8C-4ED8-B5B5-20930D26F0B3}');
-            if (!empty($connectIds)) {
-                $connectUrl = CC_GetURL($connectIds[0]);
-                if (!empty($connectUrl)) {
-                    $fullHook = rtrim($connectUrl, '/') . $hook;
-                }
-            }
-        } catch (Exception $e) {
-            // Fallback auf relativen Pfad
-        }
+        $fullHook = $this->GetHookUrl();
         $now     = time();
         $todayE  = mktime(23, 59, 59);
 
