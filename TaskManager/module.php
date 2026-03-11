@@ -10,6 +10,7 @@ class TaskManager extends IPSModule
         $this->RegisterPropertyBoolean('DarkMode', true);
         $this->RegisterPropertyBoolean('ShowStats', true);
         $this->RegisterPropertyInteger('MaxCompletedVisible', 10);
+        $this->RegisterPropertyInteger('FontSize', 14);
         $this->RegisterVariableString('TasksJson', 'Aufgaben JSON', '', 1);
         $this->RegisterVariableString('HtmlBox', 'Aufgabenliste', '~HTMLBox', 2);
         $this->RegisterVariableInteger('OpenTasks', 'Offene Aufgaben', '', 3);
@@ -210,6 +211,8 @@ class TaskManager extends IPSModule
     {
         $iid     = $this->InstanceID;
         $dark    = (bool)$this->ReadPropertyBoolean('DarkMode');
+        $fontSize = (int)$this->ReadPropertyInteger('FontSize');
+        if ($fontSize < 10 || $fontSize > 30) $fontSize = 14;
         $fullHook = $this->GetHookUrl();
         $now     = time();
         $todayE  = mktime(23, 59, 59);

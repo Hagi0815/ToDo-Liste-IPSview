@@ -20,6 +20,17 @@
       "caption": "Max. erledigte Aufgaben anzeigen",
       "minimum": 0,
       "maximum": 100
+    },
+    {
+      "type": "Select",
+      "name": "FontSize",
+      "caption": "Schriftgröße",
+      "options": [
+        { "caption": "Klein (12px)",   "value": 12 },
+        { "caption": "Normal (14px)",  "value": 14 },
+        { "caption": "Groß (16px)",    "value": 16 },
+        { "caption": "Sehr groß (18px)", "value": 18 }
+      ]
     }
   ],
   "actions": [
