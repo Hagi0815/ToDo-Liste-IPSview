@@ -314,7 +314,7 @@ class TaskManager extends IPSModule
             . '.btn-s{background:' . $acc . ';border-color:' . $acc . ';color:#fff}'
             . '.btn-d{background:' . $red . ';border-color:' . $red . ';color:#fff}';
 
-        $js = 'var H="' . addslashes($hook) . '";'
+        $js = 'var H="' . addslashes($fullHook) . '";'
             . 'function post(a,p){fetch(H,{method:"POST",headers:{"Content-Type":"application/json"},'
             . 'body:JSON.stringify({action:a,payload:p||{}})}).catch(function(e){console.error(e);})}  '
             . 'function openAdd(){'
