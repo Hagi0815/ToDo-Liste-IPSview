@@ -407,94 +407,94 @@ class TaskManager extends IPSModule
 
     private function BuildJs(): string
     {
-        return <<<'JS'
-function tmPost(action, payload) {
-    fetch(TM_HOOK, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({action: action, payload: payload || {}})
-    }).catch(function(e) { console.error('TM Fehler:', e); });
-}
-
-function tmOpenAdd() {
-    document.getElementById('tm-id').value = '';
-    document.getElementById('tm-title').value = '';
-    document.getElementById('tm-info').value = '';
-    document.getElementById('tm-prio').value = 'normal';
-    document.getElementById('tm-due').value = '';
-    document.getElementById('tm-btn-del').style.display = 'none';
-    document.getElementById('tm-mtitle').textContent = 'Neue Aufgabe';
-    document.getElementById('tm-overlay').classList.add('open');
-    document.getElementById('tm-modal').classList.add('open');
-    setTimeout(function(){ document.getElementById('tm-title').focus(); }, 80);
-}
-
-function tmEdit(s) {
-    var d; try { d = JSON.parse(s); } catch(e) { return; }
-    document.getElementById('tm-id').value = d.id;
-    document.getElementById('tm-title').value = d.title || '';
-    document.getElementById('tm-info').value = d.info || '';
-    document.getElementById('tm-prio').value = d.priority || 'normal';
-    if (d.due > 0) {
-        var dt = new Date(d.due * 1000);
-        var p = function(n){ return String(n).padStart(2,'0'); };
-        document.getElementById('tm-due').value =
-            dt.getFullYear()+'-'+p(dt.getMonth()+1)+'-'+p(dt.getDate())+'T'+p(dt.getHours())+':'+p(dt.getMinutes());
-    } else {
-        document.getElementById('tm-due').value = '';
-    }
-    document.getElementById('tm-btn-del').style.display = '';
-    document.getElementById('tm-mtitle').textContent = 'Aufgabe bearbeiten';
-    document.getElementById('tm-overlay').classList.add('open');
-    document.getElementById('tm-modal').classList.add('open');
-    setTimeout(function(){ document.getElementById('tm-title').focus(); }, 80);
-}
-
-function tmClose() {
-    document.getElementById('tm-overlay').classList.remove('open');
-    document.getElementById('tm-modal').classList.remove('open');
-}
-
-function tmSave() {
-    var title = document.getElementById('tm-title').value.trim();
-    if (!title) {
-        document.getElementById('tm-title').style.borderColor = '#ff5a5a';
-        document.getElementById('tm-title').focus();
-        return;
-    }
-    document.getElementById('tm-title').style.borderColor = '';
-    var dueRaw = document.getElementById('tm-due').value;
-    var payload = {
-        title:    title,
-        info:     document.getElementById('tm-info').value.trim(),
-        priority: document.getElementById('tm-prio').value,
-        due:      dueRaw ? Math.floor(new Date(dueRaw).getTime()/1000) : 0
-    };
-    var id = document.getElementById('tm-id').value;
-    if (id) {
-        payload.id = parseInt(id, 10);
-        tmPost('UpdateTask', payload);
-    } else {
-        tmPost('AddTask', payload);
-    }
-    tmClose();
-}
-
-function tmToggle(id, done) { tmPost('ToggleDone', {id:id, done:done}); }
-function tmDelete(id) { tmPost('DeleteTask', {id:id}); }
-function tmDeleteModal() {
-    var id = document.getElementById('tm-id').value;
-    if (id) { tmPost('DeleteTask', {id:parseInt(id,10)}); tmClose(); }
-}
-
-document.addEventListener('keydown', function(e) {
-    if (!document.getElementById('tm-modal').classList.contains('open')) return;
-    if (e.key === 'Escape') tmClose();
-    if (e.key === 'Enter' && document.activeElement.tagName !== 'TEXTAREA') {
-        e.preventDefault(); tmSave();
-    }
-});
-JS;
+        return implode('', [
+            'function tmPost(action, payload) {\n',
+            '    fetch(TM_HOOK, {\n',
+            '        method: \'POST\',\n',
+            '        headers: {\'Content-Type\': \'application/json\'},\n',
+            '        body: JSON.stringify({action: action, payload: payload || {}})\n',
+            '    }).catch(function(e) { console.error(\'TM Fehler:\', e); });\n',
+            '}\n',
+            '\n',
+            'function tmOpenAdd() {\n',
+            '    document.getElementById(\'tm-id\').value = \'\';\n',
+            '    document.getElementById(\'tm-title\').value = \'\';\n',
+            '    document.getElementById(\'tm-info\').value = \'\';\n',
+            '    document.getElementById(\'tm-prio\').value = \'normal\';\n',
+            '    document.getElementById(\'tm-due\').value = \'\';\n',
+            '    document.getElementById(\'tm-btn-del\').style.display = \'none\';\n',
+            '    document.getElementById(\'tm-mtitle\').textContent = \'Neue Aufgabe\';\n',
+            '    document.getElementById(\'tm-overlay\').classList.add(\'open\');\n',
+            '    document.getElementById(\'tm-modal\').classList.add(\'open\');\n',
+            '    setTimeout(function(){ document.getElementById(\'tm-title\').focus(); }, 80);\n',
+            '}\n',
+            '\n',
+            'function tmEdit(s) {\n',
+            '    var d; try { d = JSON.parse(s); } catch(e) { return; }\n',
+            '    document.getElementById(\'tm-id\').value = d.id;\n',
+            '    document.getElementById(\'tm-title\').value = d.title || \'\';\n',
+            '    document.getElementById(\'tm-info\').value = d.info || \'\';\n',
+            '    document.getElementById(\'tm-prio\').value = d.priority || \'normal\';\n',
+            '    if (d.due > 0) {\n',
+            '        var dt = new Date(d.due * 1000);\n',
+            '        var p = function(n){ return String(n).padStart(2,\'0\'); };\n',
+            '        document.getElementById(\'tm-due\').value =\n',
+            '            dt.getFullYear()+\'-\'+p(dt.getMonth()+1)+\'-\'+p(dt.getDate())+\'T\'+p(dt.getHours())+\':\'+p(dt.getMinutes());\n',
+            '    } else {\n',
+            '        document.getElementById(\'tm-due\').value = \'\';\n',
+            '    }\n',
+            '    document.getElementById(\'tm-btn-del\').style.display = \'\';\n',
+            '    document.getElementById(\'tm-mtitle\').textContent = \'Aufgabe bearbeiten\';\n',
+            '    document.getElementById(\'tm-overlay\').classList.add(\'open\');\n',
+            '    document.getElementById(\'tm-modal\').classList.add(\'open\');\n',
+            '    setTimeout(function(){ document.getElementById(\'tm-title\').focus(); }, 80);\n',
+            '}\n',
+            '\n',
+            'function tmClose() {\n',
+            '    document.getElementById(\'tm-overlay\').classList.remove(\'open\');\n',
+            '    document.getElementById(\'tm-modal\').classList.remove(\'open\');\n',
+            '}\n',
+            '\n',
+            'function tmSave() {\n',
+            '    var title = document.getElementById(\'tm-title\').value.trim();\n',
+            '    if (!title) {\n',
+            '        document.getElementById(\'tm-title\').style.borderColor = \'#ff5a5a\';\n',
+            '        document.getElementById(\'tm-title\').focus();\n',
+            '        return;\n',
+            '    }\n',
+            '    document.getElementById(\'tm-title\').style.borderColor = \'\';\n',
+            '    var dueRaw = document.getElementById(\'tm-due\').value;\n',
+            '    var payload = {\n',
+            '        title:    title,\n',
+            '        info:     document.getElementById(\'tm-info\').value.trim(),\n',
+            '        priority: document.getElementById(\'tm-prio\').value,\n',
+            '        due:      dueRaw ? Math.floor(new Date(dueRaw).getTime()/1000) : 0\n',
+            '    };\n',
+            '    var id = document.getElementById(\'tm-id\').value;\n',
+            '    if (id) {\n',
+            '        payload.id = parseInt(id, 10);\n',
+            '        tmPost(\'UpdateTask\', payload);\n',
+            '    } else {\n',
+            '        tmPost(\'AddTask\', payload);\n',
+            '    }\n',
+            '    tmClose();\n',
+            '}\n',
+            '\n',
+            'function tmToggle(id, done) { tmPost(\'ToggleDone\', {id:id, done:done}); }\n',
+            'function tmDelete(id) { tmPost(\'DeleteTask\', {id:id}); }\n',
+            'function tmDeleteModal() {\n',
+            '    var id = document.getElementById(\'tm-id\').value;\n',
+            '    if (id) { tmPost(\'DeleteTask\', {id:parseInt(id,10)}); tmClose(); }\n',
+            '}\n',
+            '\n',
+            'document.addEventListener(\'keydown\', function(e) {\n',
+            '    if (!document.getElementById(\'tm-modal\').classList.contains(\'open\')) return;\n',
+            '    if (e.key === \'Escape\') tmClose();\n',
+            '    if (e.key === \'Enter\' && document.activeElement.tagName !== \'TEXTAREA\') {\n',
+            '        e.preventDefault(); tmSave();\n',
+            '    }\n',
+            '});\n',
+        ]);
     }
 
     private function BuildCss(bool $Dark): string
