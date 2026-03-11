@@ -203,7 +203,8 @@ class TaskManager extends IPSModule
         $this->SetValue('OpenTasks', $open);
         $this->SetValue('OverdueTasks', $overdue);
         $hookUrl = $this->GetHookUrl();
-        $iframe = '<iframe src="' . $hookUrl . '" style="width:100%;height:100%;border:none;min-height:600px;" frameborder="0"></iframe>';
+        $cb = time(); // Cache-Buster: erzwingt Neu-Laden des iframe bei Aenderungen
+        $iframe = '<iframe src="' . $hookUrl . '?v=' . $cb . '" style="width:100%;height:100%;border:none;min-height:600px;" frameborder="0"></iframe>';
         $this->SetValue('HtmlBox', $iframe);
     }
 
