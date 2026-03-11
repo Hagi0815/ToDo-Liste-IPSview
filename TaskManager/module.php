@@ -11,6 +11,15 @@ class TaskManager extends IPSModule
         $this->RegisterPropertyBoolean('ShowStats', true);
         $this->RegisterPropertyInteger('MaxCompletedVisible', 10);
         $this->RegisterPropertyInteger('FontSize', 14);
+
+        // Benachrichtigungen
+        $this->RegisterPropertyBoolean('NotifyOnAdd',    true);
+        $this->RegisterPropertyBoolean('NotifyOnUpdate', false);
+        $this->RegisterPropertyBoolean('NotifyOnDone',   false);
+        $this->RegisterPropertyString('NotifyTextAdd',    'Neue Aufgabe: {title}');
+        $this->RegisterPropertyString('NotifyTextUpdate', 'Aufgabe geaendert: {title}');
+        $this->RegisterPropertyString('NotifyTextDone',   'Aufgabe erledigt: {title}');
+        $this->RegisterPropertyString('NotifyTargets',    '[]');
         $this->RegisterVariableString('TasksJson', 'Aufgaben JSON', '', 1);
         $this->RegisterVariableString('HtmlBox', 'Aufgabenliste', '~HTMLBox', 2);
         $this->RegisterVariableInteger('OpenTasks', 'Offene Aufgaben', '', 3);
@@ -54,13 +63,36 @@ class TaskManager extends IPSModule
         $payload = (isset($data['payload']) && is_array($data['payload'])) ? $data['payload'] : array();
         switch ($action) {
             case 'AddTask':
-                $this->AddTask($payload);
+                $newId = $this->AddTask($payload);
+                $tasks = $this->LoadTasks();
+                foreach ($tasks as $t) {
+                    if ((int)$t['id'] === $newId) {
+                        $this->SendNotification('add', $t);
+                        break;
+                    }
+                }
                 break;
             case 'UpdateTask':
                 $this->UpdateTask($payload);
+                $tasks = $this->LoadTasks();
+                foreach ($tasks as $t) {
+                    if ((int)$t['id'] === (int)(isset($payload['id']) ? $payload['id'] : -1)) {
+                        $this->SendNotification('update', $t);
+                        break;
+                    }
+                }
                 break;
             case 'ToggleDone':
                 $this->ToggleDone($payload);
+                if (!empty($payload['done'])) {
+                    $tasks = $this->LoadTasks();
+                    foreach ($tasks as $t) {
+                        if ((int)$t['id'] === (int)(isset($payload['id']) ? $payload['id'] : -1)) {
+                            $this->SendNotification('done', $t);
+                            break;
+                        }
+                    }
+                }
                 break;
             case 'DeleteTask':
                 $this->DeleteTask($payload);
@@ -80,6 +112,10 @@ class TaskManager extends IPSModule
     public function TM_AddTask($Title, $Info = '', $Priority = 'normal', $Due = 0)
     {
         $id = $this->AddTask(array('title' => $Title, 'info' => $Info, 'priority' => $Priority, 'due' => $Due));
+        $tasks = $this->LoadTasks();
+        foreach ($tasks as $t) {
+            if ((int)$t['id'] === $id) { $this->SendNotification('add', $t); break; }
+        }
         $this->Refresh();
         return $id;
     }
@@ -462,6 +498,60 @@ class TaskManager extends IPSModule
         $hooks[] = array('Hook' => $uri, 'TargetID' => $this->InstanceID);
         IPS_SetProperty($hid, 'Hooks', json_encode($hooks));
         IPS_ApplyChanges($hid);
+    }
+
+
+    private function SendNotification($type, $task)
+    {
+        $enabled = false;
+        $textTemplate = '';
+        switch ($type) {
+            case 'add':
+                $enabled = (bool)$this->ReadPropertyBoolean('NotifyOnAdd');
+                $textTemplate = (string)$this->ReadPropertyString('NotifyTextAdd');
+                break;
+            case 'update':
+                $enabled = (bool)$this->ReadPropertyBoolean('NotifyOnUpdate');
+                $textTemplate = (string)$this->ReadPropertyString('NotifyTextUpdate');
+                break;
+            case 'done':
+                $enabled = (bool)$this->ReadPropertyBoolean('NotifyOnDone');
+                $textTemplate = (string)$this->ReadPropertyString('NotifyTextDone');
+                break;
+        }
+
+        if (!$enabled) return;
+
+        // Platzhalter ersetzen
+        $title    = (string)(isset($task['title']) ? $task['title'] : '');
+        $priority = (string)(isset($task['priority']) ? $task['priority'] : 'normal');
+        $prioMap  = array('low' => 'Niedrig', 'normal' => 'Normal', 'high' => 'Hoch');
+        $prioText = isset($prioMap[$priority]) ? $prioMap[$priority] : 'Normal';
+        $due      = (int)(isset($task['due']) ? $task['due'] : 0);
+        $dueText  = $due > 0 ? date('d.m.Y H:i', $due) : 'kein Datum';
+
+        $text = str_replace(
+            array('{title}', '{priority}', '{due}'),
+            array($title, $prioText, $dueText),
+            $textTemplate
+        );
+
+        // An alle Ziel-Instanzen senden
+        $targets = json_decode($this->ReadPropertyString('NotifyTargets'), true);
+        if (!is_array($targets)) return;
+
+        foreach ($targets as $target) {
+            $instanceId = (int)(isset($target['InstanceID']) ? $target['InstanceID'] : 0);
+            if ($instanceId <= 0) continue;
+            try {
+                // IPS View Nachricht senden via WFC_PushNotification
+                if (IPS_InstanceExists($instanceId)) {
+                    WFC_PushNotification($instanceId, 'Task Manager', $text, '', 0);
+                }
+            } catch (Exception $e) {
+                IPS_LogMessage('TaskManager', 'Benachrichtigung fehlgeschlagen fuer Instanz ' . $instanceId . ': ' . $e->getMessage());
+            }
+        }
     }
 
     private function LoadTasks()

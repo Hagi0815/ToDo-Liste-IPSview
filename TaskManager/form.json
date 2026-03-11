@@ -26,11 +26,85 @@
       "name": "FontSize",
       "caption": "Schriftgröße",
       "options": [
-        { "caption": "Klein (12px)",   "value": 12 },
-        { "caption": "Normal (14px)",  "value": 14 },
-        { "caption": "Groß (16px)",    "value": 16 },
+        { "caption": "Klein (12px)",     "value": 12 },
+        { "caption": "Normal (14px)",    "value": 14 },
+        { "caption": "Groß (16px)",      "value": 16 },
         { "caption": "Sehr groß (18px)", "value": 18 }
       ]
+    },
+    {
+      "type": "Label",
+      "caption": " "
+    },
+    {
+      "type": "Label",
+      "caption": "── Benachrichtigungen ──────────────────────"
+    },
+    {
+      "type": "CheckBox",
+      "name": "NotifyOnAdd",
+      "caption": "Benachrichtigung bei neuer Aufgabe"
+    },
+    {
+      "type": "CheckBox",
+      "name": "NotifyOnUpdate",
+      "caption": "Benachrichtigung bei Änderung einer Aufgabe"
+    },
+    {
+      "type": "CheckBox",
+      "name": "NotifyOnDone",
+      "caption": "Benachrichtigung wenn Aufgabe erledigt"
+    },
+    {
+      "type": "Label",
+      "caption": "Nachrichtentext (Platzhalter: {title}, {priority}, {due})"
+    },
+    {
+      "type": "ValidationTextBox",
+      "name": "NotifyTextAdd",
+      "caption": "Text bei neuer Aufgabe"
+    },
+    {
+      "type": "ValidationTextBox",
+      "name": "NotifyTextUpdate",
+      "caption": "Text bei Änderung"
+    },
+    {
+      "type": "ValidationTextBox",
+      "name": "NotifyTextDone",
+      "caption": "Text bei Erledigt"
+    },
+    {
+      "type": "Label",
+      "caption": "Empfänger (IPS View Instanzen)"
+    },
+    {
+      "type": "List",
+      "name": "NotifyTargets",
+      "caption": "Ziel-Instanzen",
+      "rowCount": 5,
+      "add": true,
+      "delete": true,
+      "columns": [
+        {
+          "caption": "Instanz-ID",
+          "name": "InstanceID",
+          "width": "150px",
+          "edit": {
+            "type": "SelectModule",
+            "moduleID": "{2C247671-7083-4E4D-8F24-38A5D90B5E89}"
+          }
+        },
+        {
+          "caption": "Name",
+          "name": "Label",
+          "width": "auto",
+          "edit": {
+            "type": "ValidationTextBox"
+          }
+        }
+      ],
+      "values": []
     }
   ],
   "actions": [
