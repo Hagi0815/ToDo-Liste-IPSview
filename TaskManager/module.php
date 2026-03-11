@@ -231,7 +231,7 @@ class TaskManager extends IPSModule
         $muted = $dark ? 'rgba(240,240,240,.4)' : 'rgba(26,26,46,.4)';
         $bord  = $dark ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.09)';
         $acc   = $dark ? '#00cdab' : '#00897b';
-        $red   = $dark ? '#ff5a5a' : '#d32f2f';
+        $red   = $dark ? '#e00000' : '#d32f2f';
         $ora   = $dark ? '#ffaa40' : '#e65100';
         $inp   = $dark ? '#14151a' : '#f0f2f5';
         $ov2   = $dark ? 'rgba(0,0,0,.7)' : 'rgba(0,0,0,.4)';
