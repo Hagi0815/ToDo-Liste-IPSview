@@ -282,7 +282,7 @@ class TaskManager extends IPSModule
             . '.info{font-size:12px;color:' . $muted . ';margin-top:2px;line-height:1.4}'
             . '.badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}'
             . '.badge{font-size:11px;padding:2px 7px;border-radius:999px;border:1px solid ' . $bord . ';color:' . $muted . '}'
-            . '.p-h{border-color:' . $red . ';color:' . $red . ';background:rgba(220,0,0,.18)}'
+            . '.p-h{background:#cc0000;border-color:#cc0000;color:#ffffff;font-weight:700}'
             . '.p-n{border-color:' . $acc . ';color:' . $acc . ';background:rgba(0,205,171,.12)}'
             . '.p-l{border-color:' . $muted . ';color:' . $muted . '}'
             . '.due-ov{border-color:' . $red . ';color:' . $red . ';background:rgba(220,0,0,.18)}'
