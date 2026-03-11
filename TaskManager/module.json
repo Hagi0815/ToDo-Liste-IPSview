@@ -3,9 +3,7 @@
   "name": "Task Manager",
   "type": 3,
   "vendor": "",
-  "aliases": [
-    "Task Manager"
-  ],
+  "aliases": ["Task Manager"],
   "url": "",
   "parentRequirements": [],
   "childRequirements": [],

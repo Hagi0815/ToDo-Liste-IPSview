@@ -4,81 +4,129 @@ declare(strict_types=1);
 
 class TaskManager extends IPSModule
 {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lifecycle
+    // ─────────────────────────────────────────────────────────────────────────
+
     public function Create()
     {
         parent::Create();
 
+        // Aufgaben werden als JSON-Array in einem Attribut gespeichert
         $this->RegisterAttributeString('Tasks', '[]');
         $this->RegisterAttributeInteger('NextID', 1);
 
-        $this->RegisterPropertyInteger('MaxCompletedVisible', 10);
-        $this->RegisterPropertyBoolean('ShowStats', true);
-        $this->RegisterPropertyBoolean('ShowPriority', true);
-        $this->RegisterPropertyBoolean('ShowDueDate', true);
+        // Einstellungen
         $this->RegisterPropertyBoolean('DarkMode', true);
+        $this->RegisterPropertyBoolean('ShowStats', true);
+        $this->RegisterPropertyInteger('MaxCompletedVisible', 10);
 
-        // Typ 1 = Kachel-Visu (wie das Original-Modul)
-        $this->SetVisualizationType(1);
-
-        $this->RegisterVariableInteger('OpenTasks', 'Offene Aufgaben', '', 1);
-        $this->RegisterVariableInteger('OverdueTasks', 'Ueberfaellig', '', 2);
+        // Variablen
+        $this->RegisterVariableString('TasksJson',    'Aufgaben (JSON)',      '',        1);
+        $this->RegisterVariableString('HtmlBox',      'Aufgabenliste',        '~HTMLBox', 2);
+        $this->RegisterVariableInteger('OpenTasks',   'Offene Aufgaben',      '',        3);
+        $this->RegisterVariableInteger('OverdueTasks','Ueberfaellige Aufgaben','',       4);
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-        $this->UpdateUI();
+        $this->RegisterHook();
+        $this->Refresh();
     }
 
-    // Wird von IPS View als Kachel gerendert – hat Zugriff auf window.requestAction
-    public function GetVisualizationTile(): string
-    {
-        return $this->BuildHtml($this->LoadTasks());
-    }
+    // ─────────────────────────────────────────────────────────────────────────
+    // WebHook – empfängt POST aus der HTMLBox
+    // ─────────────────────────────────────────────────────────────────────────
 
-    public function RequestAction($Ident, $Value)
+    public function ProcessHookData()
     {
-        $data = @json_decode((string)$Value, true);
-        if (!is_array($data)) {
-            $data = [];
+        // CORS-Header damit Browser keinen Preflight-Fehler wirft
+        header('Content-Type: application/json; charset=utf-8');
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: POST, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type');
+
+        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+            http_response_code(204);
+            echo '';
+            return;
         }
 
-        switch ($Ident) {
-            case 'AddTask':
-                $this->AddTask($data);
-                break;
-            case 'UpdateTask':
-                $this->UpdateTask($data);
-                break;
-            case 'ToggleDone':
-                $this->ToggleDone($data);
-                break;
-            case 'DeleteTask':
-                $this->DeleteTask($data);
-                break;
-            case 'DeleteAllCompleted':
-                $this->DeleteAllCompleted();
-                break;
-            default:
-                throw new Exception('Unbekannte Aktion: ' . $Ident);
+        $raw  = file_get_contents('php://input');
+        $data = json_decode($raw ?: '', true);
+
+        if (!is_array($data) || !isset($data['action'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => 'Ungueltige Anfrage']);
+            return;
         }
-        $this->UpdateUI();
+
+        $action  = (string)$data['action'];
+        $payload = isset($data['payload']) && is_array($data['payload'])
+                   ? $data['payload'] : [];
+
+        try {
+            switch ($action) {
+                case 'AddTask':
+                    $this->AddTask($payload);
+                    break;
+                case 'UpdateTask':
+                    $this->UpdateTask($payload);
+                    break;
+                case 'ToggleDone':
+                    $this->ToggleDone($payload);
+                    break;
+                case 'DeleteTask':
+                    $this->DeleteTask($payload);
+                    break;
+                case 'DeleteAllCompleted':
+                    $this->DeleteAllCompleted();
+                    break;
+                default:
+                    http_response_code(400);
+                    echo json_encode(['ok' => false, 'error' => 'Unbekannte Aktion: ' . $action]);
+                    return;
+            }
+            $this->Refresh();
+            echo json_encode(['ok' => true]);
+        } catch (Exception $e) {
+            IPS_LogMessage('TaskManager', 'Hook-Fehler: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Öffentliche Methoden
+    // ─────────────────────────────────────────────────────────────────────────
 
     public function TM_AddTask(string $Title, string $Info = '', string $Priority = 'normal', int $Due = 0): int
     {
-        $id = $this->AddTask(['title' => $Title, 'info' => $Info, 'priority' => $Priority, 'due' => $Due]);
-        $this->UpdateUI();
+        $id = $this->AddTask([
+            'title'    => $Title,
+            'info'     => $Info,
+            'priority' => $Priority,
+            'due'      => $Due,
+        ]);
+        $this->Refresh();
         return $id;
     }
 
     public function TM_DeleteAllCompleted()
     {
         $this->DeleteAllCompleted();
-        $this->UpdateUI();
+        $this->Refresh();
     }
 
-    // ── CRUD ──────────────────────────────────────────────────────────────────
+    public function TM_Refresh()
+    {
+        $this->Refresh();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CRUD
+    // ─────────────────────────────────────────────────────────────────────────
 
     private function AddTask(array $Data): int
     {
@@ -88,9 +136,9 @@ class TaskManager extends IPSModule
 
         $tasks[] = [
             'id'        => $id,
-            'title'     => trim((string)($Data['title'] ?? '')),
-            'info'      => trim((string)($Data['info'] ?? '')),
-            'priority'  => $this->ValidatePriority((string)($Data['priority'] ?? 'normal')),
+            'title'     => trim((string)($Data['title']    ?? '')),
+            'info'      => trim((string)($Data['info']     ?? '')),
+            'priority'  => $this->ValidPrio((string)($Data['priority'] ?? 'normal')),
             'due'       => (int)($Data['due'] ?? 0),
             'done'      => false,
             'createdAt' => time(),
@@ -102,13 +150,13 @@ class TaskManager extends IPSModule
 
     private function UpdateTask(array $Data)
     {
-        $id    = (int)($Data['id'] ?? 0);
+        $id    = (int)($Data['id'] ?? -1);
         $tasks = $this->LoadTasks();
         foreach ($tasks as &$t) {
             if ((int)$t['id'] === $id) {
-                $t['title']    = trim((string)($Data['title'] ?? $t['title']));
-                $t['info']     = trim((string)($Data['info'] ?? $t['info']));
-                $t['priority'] = $this->ValidatePriority((string)($Data['priority'] ?? $t['priority']));
+                $t['title']    = trim((string)($Data['title']    ?? $t['title']));
+                $t['info']     = trim((string)($Data['info']     ?? $t['info']));
+                $t['priority'] = $this->ValidPrio((string)($Data['priority'] ?? $t['priority']));
                 $t['due']      = (int)($Data['due'] ?? $t['due']);
                 break;
             }
@@ -118,7 +166,7 @@ class TaskManager extends IPSModule
 
     private function ToggleDone(array $Data)
     {
-        $id    = (int)($Data['id'] ?? 0);
+        $id    = (int)($Data['id']   ?? -1);
         $done  = (bool)($Data['done'] ?? false);
         $tasks = $this->LoadTasks();
         foreach ($tasks as &$t) {
@@ -137,7 +185,7 @@ class TaskManager extends IPSModule
 
     private function DeleteTask(array $Data)
     {
-        $id    = (int)($Data['id'] ?? 0);
+        $id    = (int)($Data['id'] ?? -1);
         $tasks = [];
         foreach ($this->LoadTasks() as $t) {
             if ((int)$t['id'] !== $id) {
@@ -158,52 +206,76 @@ class TaskManager extends IPSModule
         $this->SaveTasks($tasks);
     }
 
-    private function UpdateUI()
+    // ─────────────────────────────────────────────────────────────────────────
+    // Refresh – alle Variablen aktualisieren
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private function Refresh()
     {
         $tasks   = $this->LoadTasks();
         $now     = time();
         $open    = 0;
         $overdue = 0;
+
         foreach ($tasks as $t) {
-            if (!empty($t['done'])) continue;
+            if (!empty($t['done'])) {
+                continue;
+            }
             $open++;
             $due = (int)($t['due'] ?? 0);
-            if ($due > 0 && $due < $now) $overdue++;
+            if ($due > 0 && $due < $now) {
+                $overdue++;
+            }
         }
-        $this->SetValue('OpenTasks', $open);
+
+        // JSON-Variable mit allen Aufgaben
+        $this->SetValue('TasksJson', json_encode($tasks, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+        // Zähler-Variablen
+        $this->SetValue('OpenTasks',    $open);
         $this->SetValue('OverdueTasks', $overdue);
-        $this->UpdateVisualizationValue(json_encode(['type' => 'update']));
+
+        // HTMLBox
+        $hookUrl = $this->HookUrl();
+        $this->SetValue('HtmlBox', $this->BuildHtml($tasks, $hookUrl));
     }
 
-    // ── HTML ──────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // HTML
+    // ─────────────────────────────────────────────────────────────────────────
 
-    private function BuildHtml(array $Tasks): string
+    private function BuildHtml(array $Tasks, string $HookUrl): string
     {
-        $iid       = $this->InstanceID;
         $dark      = (bool)$this->ReadPropertyBoolean('DarkMode');
         $showStats = (bool)$this->ReadPropertyBoolean('ShowStats');
-        $showPrio  = (bool)$this->ReadPropertyBoolean('ShowPriority');
-        $showDue   = (bool)$this->ReadPropertyBoolean('ShowDueDate');
         $maxDone   = (int)$this->ReadPropertyInteger('MaxCompletedVisible');
 
         $open = [];
         $done = [];
         foreach ($Tasks as $t) {
-            if (!empty($t['done'])) $done[] = $t;
-            else $open[] = $t;
+            if (!empty($t['done'])) {
+                $done[] = $t;
+            } else {
+                $open[] = $t;
+            }
         }
 
-        usort($open, function ($a, $b) { return $this->SortScore($a) - $this->SortScore($b); });
-        usort($done, function ($a, $b) { return (int)($b['completedAt'] ?? 0) - (int)($a['completedAt'] ?? 0); });
-        if ($maxDone > 0) $done = array_slice($done, 0, $maxDone);
+        usort($open, function ($a, $b) {
+            return $this->SortScore($a) - $this->SortScore($b);
+        });
+        usort($done, function ($a, $b) {
+            return (int)($b['completedAt'] ?? 0) - (int)($a['completedAt'] ?? 0);
+        });
+        if ($maxDone > 0) {
+            $done = array_slice($done, 0, $maxDone);
+        }
 
         $now    = time();
         $todayS = mktime(0, 0, 0);
         $todayE = mktime(23, 59, 59);
 
-        $totalOpen = count($open);
         $totalOverdue = 0;
-        $totalToday = 0;
+        $totalToday   = 0;
         foreach ($open as $t) {
             $due = (int)($t['due'] ?? 0);
             if ($due > 0 && $due < $now) $totalOverdue++;
@@ -214,278 +286,316 @@ class TaskManager extends IPSModule
 
         if ($showStats) {
             $body .= '<div class="tm-stats">'
-                . '<div class="tm-stat tm-stat-open"><div class="tm-stat-val">' . $totalOpen . '</div><div class="tm-stat-lbl">Offen</div></div>'
-                . '<div class="tm-stat tm-stat-overdue"><div class="tm-stat-val">' . $totalOverdue . '</div><div class="tm-stat-lbl">&#220;berf&#228;llig</div></div>'
-                . '<div class="tm-stat tm-stat-today"><div class="tm-stat-val">' . $totalToday . '</div><div class="tm-stat-lbl">Heute</div></div>'
+                . '<div class="tm-stat tm-open"><div class="tm-val">' . count($open) . '</div><div class="tm-lbl">Offen</div></div>'
+                . '<div class="tm-stat tm-overdue"><div class="tm-val">' . $totalOverdue . '</div><div class="tm-lbl">&#220;berf&#228;llig</div></div>'
+                . '<div class="tm-stat tm-today"><div class="tm-val">' . $totalToday . '</div><div class="tm-lbl">Heute</div></div>'
                 . '</div>';
         }
 
-        $body .= $this->BuildFormHtml();
+        $body .= '<button class="tm-btn tm-btn-add" onclick="tmOpenAdd()">+ Neue Aufgabe</button>';
 
         foreach ($open as $t) {
-            $body .= $this->BuildRow($t, $showPrio, $showDue, $now, $todayS, $todayE);
+            $body .= $this->BuildRow($t, $now, $todayE);
         }
         if (!empty($done)) {
-            $body .= '<div class="tm-section-header">Erledigt</div>';
+            $body .= '<div class="tm-divider">&#10003; Erledigt</div>';
             foreach ($done as $t) {
-                $body .= $this->BuildRow($t, $showPrio, $showDue, $now, $todayS, $todayE);
+                $body .= $this->BuildRow($t, $now, $todayE);
             }
         }
         if (empty($open) && empty($done)) {
             $body .= '<div class="tm-empty">Keine Aufgaben &#8211; leg eine neue an!</div>';
         }
 
-        return '<!doctype html><html><head><meta charset="utf-8"/>'
+        $hookEsc = addslashes($HookUrl);
+
+        return '<!doctype html><html><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width,initial-scale=1">'
             . '<style>' . $this->BuildCss($dark) . '</style>'
             . '</head><body>'
-            . $this->BuildJs($iid)
             . '<div class="tm-wrap">' . $body . '</div>'
+            . $this->BuildModal()
+            . '<script>'
+            . 'var TM_HOOK="' . $hookEsc . '";'
+            . $this->BuildJs()
+            . '</script>'
             . '</body></html>';
     }
 
-    private function BuildFormHtml(): string
+    private function BuildRow(array $T, int $Now, int $TodayE): string
     {
-        return '
-<div class="tm-add-bar">
-  <button class="tm-btn tm-btn-primary tm-btn-full" onclick="tmOpenAdd()">+ Neue Aufgabe</button>
-</div>
-<div class="tm-backdrop" id="tm-backdrop" onclick="tmCloseModal()"></div>
-<div class="tm-modal" id="tm-modal">
-  <div class="tm-modal-header">
-    <span id="tm-modal-title">Neue Aufgabe</span>
-    <button class="tm-modal-close" onclick="tmCloseModal()">&#x2715;</button>
+        $id    = (int)$T['id'];
+        $title = htmlspecialchars((string)($T['title'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $info  = htmlspecialchars((string)($T['info']  ?? ''), ENT_QUOTES, 'UTF-8');
+        $done  = !empty($T['done']);
+        $prio  = (string)($T['priority'] ?? 'normal');
+        $dueTs = (int)($T['due'] ?? 0);
+
+        $infoHtml = $info !== ''
+            ? '<div class="tm-info">' . $info . '</div>'
+            : '';
+
+        $badges = '';
+        $pl = ['low' => 'Niedrig', 'normal' => 'Normal', 'high' => 'Hoch'];
+        $badges .= '<span class="tm-badge tm-p-' . $prio . '">' . ($pl[$prio] ?? 'Normal') . '</span>';
+
+        if ($dueTs > 0) {
+            $dc = '';
+            if ($dueTs < $Now) $dc = ' tm-overdue';
+            elseif ($dueTs <= $TodayE) $dc = ' tm-today';
+            $badges .= '<span class="tm-badge tm-due' . $dc . '">&#128197; ' . date('d.m.y H:i', $dueTs) . '</span>';
+        }
+
+        // Daten für Edit-Modal als JSON
+        $editData = htmlspecialchars(json_encode([
+            'id'       => $id,
+            'title'    => (string)($T['title'] ?? ''),
+            'info'     => (string)($T['info']  ?? ''),
+            'priority' => $prio,
+            'due'      => $dueTs,
+        ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+
+        return '<div class="tm-row' . ($done ? ' tm-done' : '') . '">'
+            . '<input type="checkbox" class="tm-chk"'
+            . ($done ? ' checked' : '')
+            . ' onchange="tmToggle(' . $id . ',this.checked)">'
+            . '<div class="tm-body" onclick="tmEdit(\'' . $editData . '\')">'
+            . '<div class="tm-title">' . $title . '</div>'
+            . $infoHtml
+            . '<div class="tm-badges">' . $badges . '</div>'
+            . '</div>'
+            . '<button class="tm-del" onclick="tmDelete(' . $id . ')">&#x2715;</button>'
+            . '</div>';
+    }
+
+    private function BuildModal(): string
+    {
+        return '<div id="tm-overlay" class="tm-overlay" onclick="tmClose()"></div>
+<div id="tm-modal" class="tm-modal">
+  <div class="tm-mhead">
+    <span id="tm-mtitle">Neue Aufgabe</span>
+    <button class="tm-mclose" onclick="tmClose()">&#x2715;</button>
   </div>
-  <div class="tm-modal-body">
-    <input type="hidden" id="tm-edit-id" value="" />
-    <div class="tm-field">
-      <label class="tm-label">Titel *</label>
-      <input class="tm-input" id="tm-f-title" type="text" placeholder="Aufgabentitel ..." autocomplete="off" />
-    </div>
-    <div class="tm-field">
-      <label class="tm-label">Beschreibung</label>
-      <textarea class="tm-input tm-textarea" id="tm-f-info" placeholder="Notiz (optional) ..."></textarea>
-    </div>
-    <div class="tm-field-row">
-      <div class="tm-field">
+  <div class="tm-mbody">
+    <input type="hidden" id="tm-id">
+    <label class="tm-label">Titel *</label>
+    <input class="tm-input" id="tm-title" type="text" placeholder="Titel der Aufgabe ...">
+    <label class="tm-label">Beschreibung</label>
+    <textarea class="tm-input tm-ta" id="tm-info" placeholder="Notiz (optional) ..."></textarea>
+    <div class="tm-row2">
+      <div>
         <label class="tm-label">Priorit&#228;t</label>
-        <select class="tm-input" id="tm-f-prio">
+        <select class="tm-input" id="tm-prio">
           <option value="low">Niedrig</option>
           <option value="normal" selected>Normal</option>
           <option value="high">Hoch</option>
         </select>
       </div>
-      <div class="tm-field">
+      <div>
         <label class="tm-label">F&#228;llig am</label>
-        <input class="tm-input" id="tm-f-due" type="datetime-local" />
+        <input class="tm-input" id="tm-due" type="datetime-local">
       </div>
     </div>
   </div>
-  <div class="tm-modal-footer">
-    <button class="tm-btn tm-btn-danger" id="tm-del-btn" onclick="tmDeleteFromModal()" style="display:none">L&#246;schen</button>
-    <button class="tm-btn" onclick="tmCloseModal()">Abbrechen</button>
-    <button class="tm-btn tm-btn-primary" onclick="tmSaveModal()">Speichern</button>
+  <div class="tm-mfoot">
+    <button class="tm-btn tm-btn-del" id="tm-btn-del" style="display:none" onclick="tmDeleteModal()">L&#246;schen</button>
+    <button class="tm-btn" onclick="tmClose()">Abbrechen</button>
+    <button class="tm-btn tm-btn-save" onclick="tmSave()">Speichern</button>
   </div>
 </div>';
     }
 
-    private function BuildRow(array $T, bool $ShowPrio, bool $ShowDue, int $Now, int $TodayS, int $TodayE): string
+    private function BuildJs(): string
     {
-        $id    = (int)$T['id'];
-        $title = htmlspecialchars((string)($T['title'] ?? ''), ENT_QUOTES, 'UTF-8');
-        $info  = htmlspecialchars((string)($T['info'] ?? ''), ENT_QUOTES, 'UTF-8');
-        $done  = !empty($T['done']);
-        $prio  = (string)($T['priority'] ?? 'normal');
-        $dueTs = (int)($T['due'] ?? 0);
+        return <<<'JS'
+function tmPost(action, payload) {
+    fetch(TM_HOOK, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: action, payload: payload || {}})
+    }).catch(function(e) { console.error('TM Fehler:', e); });
+}
 
-        $chk = '<input type="checkbox" class="tm-chk" '
-            . ($done ? 'checked' : '')
-            . ' onchange="tmToggle(' . $id . ', this.checked)" />';
+function tmOpenAdd() {
+    document.getElementById('tm-id').value = '';
+    document.getElementById('tm-title').value = '';
+    document.getElementById('tm-info').value = '';
+    document.getElementById('tm-prio').value = 'normal';
+    document.getElementById('tm-due').value = '';
+    document.getElementById('tm-btn-del').style.display = 'none';
+    document.getElementById('tm-mtitle').textContent = 'Neue Aufgabe';
+    document.getElementById('tm-overlay').classList.add('open');
+    document.getElementById('tm-modal').classList.add('open');
+    setTimeout(function(){ document.getElementById('tm-title').focus(); }, 80);
+}
 
-        $infoHtml = $info !== '' ? '<div class="tm-info">' . $info . '</div>' : '';
-
-        $badges = '';
-        if ($ShowPrio) {
-            $pl     = ['low' => 'Niedrig', 'normal' => 'Normal', 'high' => 'Hoch'];
-            $badges .= '<span class="tm-badge tm-badge-' . $prio . '">' . ($pl[$prio] ?? 'Normal') . '</span>';
-        }
-        if ($ShowDue && $dueTs > 0) {
-            $dc = '';
-            if ($dueTs < $Now) $dc = ' tm-due-overdue';
-            elseif ($dueTs <= $TodayE) $dc = ' tm-due-today';
-            $badges .= '<span class="tm-badge tm-due-badge' . $dc . '">&#128197; ' . date('d.m.Y H:i', $dueTs) . '</span>';
-        }
-
-        $editJson = htmlspecialchars(json_encode([
-            'id' => $id, 'title' => (string)($T['title'] ?? ''),
-            'info' => (string)($T['info'] ?? ''), 'priority' => $prio, 'due' => $dueTs,
-        ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
-
-        return '
-<div class="tm-item' . ($done ? ' tm-done' : '') . '">
-  <div class="tm-item-left">' . $chk . '<span class="tm-prio-dot tm-prio-' . $prio . '"></span></div>
-  <div class="tm-item-body" onclick="tmOpenEdit(\'' . $editJson . '\')">
-    <div class="tm-title">' . $title . '</div>' . $infoHtml
-            . ($badges !== '' ? '<div class="tm-badges">' . $badges . '</div>' : '') . '
-  </div>
-  <button class="tm-item-del" onclick="event.stopPropagation();tmDelete(' . $id . ')">&#x2715;</button>
-</div>';
-    }
-
-    private function BuildJs(int $Iid): string
-    {
-        return '<script>
-(function() {
-  var IID = ' . $Iid . ';
-
-  // IPS View stellt window.requestAction bereit wenn die Seite als Kachel läuft
-  function tmSend(ident, payload) {
-    var value = JSON.stringify(payload);
-
-    if (typeof window.requestAction === "function") {
-      window.requestAction(IID, ident, value);
-      return;
-    }
-    // Fallback: postMessage an IPS View Parent
-    var msg = { type: "requestAction", ident: ident, value: value };
-    try { window.parent.postMessage(JSON.stringify(msg), "*"); } catch(e) {}
-    try { window.parent.postMessage(msg, "*"); } catch(e) {}
-  }
-
-  window.tmToggle = function(id, done) {
-    tmSend("ToggleDone", {id: id, done: done});
-  };
-
-  window.tmDelete = function(id) {
-    tmSend("DeleteTask", {id: id});
-  };
-
-  window.tmOpenAdd = function() {
-    document.getElementById("tm-edit-id").value = "";
-    document.getElementById("tm-f-title").value = "";
-    document.getElementById("tm-f-info").value = "";
-    document.getElementById("tm-f-prio").value = "normal";
-    document.getElementById("tm-f-due").value = "";
-    document.getElementById("tm-del-btn").style.display = "none";
-    document.getElementById("tm-modal-title").textContent = "Neue Aufgabe";
-    document.getElementById("tm-modal").classList.add("open");
-    document.getElementById("tm-backdrop").classList.add("open");
-    setTimeout(function() { document.getElementById("tm-f-title").focus(); }, 80);
-  };
-
-  window.tmOpenEdit = function(s) {
+function tmEdit(s) {
     var d; try { d = JSON.parse(s); } catch(e) { return; }
-    document.getElementById("tm-edit-id").value = d.id || "";
-    document.getElementById("tm-f-title").value = d.title || "";
-    document.getElementById("tm-f-info").value = d.info || "";
-    document.getElementById("tm-f-prio").value = d.priority || "normal";
+    document.getElementById('tm-id').value = d.id;
+    document.getElementById('tm-title').value = d.title || '';
+    document.getElementById('tm-info').value = d.info || '';
+    document.getElementById('tm-prio').value = d.priority || 'normal';
     if (d.due > 0) {
-      var dt = new Date(d.due * 1000), pad = function(n){return String(n).padStart(2,"0");};
-      document.getElementById("tm-f-due").value = dt.getFullYear()+"-"+pad(dt.getMonth()+1)+"-"+pad(dt.getDate())+"T"+pad(dt.getHours())+":"+pad(dt.getMinutes());
+        var dt = new Date(d.due * 1000);
+        var p = function(n){ return String(n).padStart(2,'0'); };
+        document.getElementById('tm-due').value =
+            dt.getFullYear()+'-'+p(dt.getMonth()+1)+'-'+p(dt.getDate())+'T'+p(dt.getHours())+':'+p(dt.getMinutes());
     } else {
-      document.getElementById("tm-f-due").value = "";
+        document.getElementById('tm-due').value = '';
     }
-    document.getElementById("tm-del-btn").style.display = "";
-    document.getElementById("tm-modal-title").textContent = "Aufgabe bearbeiten";
-    document.getElementById("tm-modal").classList.add("open");
-    document.getElementById("tm-backdrop").classList.add("open");
-    setTimeout(function() { document.getElementById("tm-f-title").focus(); }, 80);
-  };
+    document.getElementById('tm-btn-del').style.display = '';
+    document.getElementById('tm-mtitle').textContent = 'Aufgabe bearbeiten';
+    document.getElementById('tm-overlay').classList.add('open');
+    document.getElementById('tm-modal').classList.add('open');
+    setTimeout(function(){ document.getElementById('tm-title').focus(); }, 80);
+}
 
-  window.tmCloseModal = function() {
-    document.getElementById("tm-modal").classList.remove("open");
-    document.getElementById("tm-backdrop").classList.remove("open");
-  };
+function tmClose() {
+    document.getElementById('tm-overlay').classList.remove('open');
+    document.getElementById('tm-modal').classList.remove('open');
+}
 
-  window.tmSaveModal = function() {
-    var title = document.getElementById("tm-f-title").value.trim();
-    if (!title) { document.getElementById("tm-f-title").style.borderColor="#ff5a5a"; document.getElementById("tm-f-title").focus(); return; }
-    document.getElementById("tm-f-title").style.borderColor = "";
-    var info   = document.getElementById("tm-f-info").value.trim();
-    var prio   = document.getElementById("tm-f-prio").value;
-    var dueRaw = document.getElementById("tm-f-due").value;
-    var due    = dueRaw ? Math.floor(new Date(dueRaw).getTime()/1000) : 0;
-    var editId = document.getElementById("tm-edit-id").value;
-    if (editId) {
-      tmSend("UpdateTask", {id:parseInt(editId,10), title:title, info:info, priority:prio, due:due});
+function tmSave() {
+    var title = document.getElementById('tm-title').value.trim();
+    if (!title) {
+        document.getElementById('tm-title').style.borderColor = '#ff5a5a';
+        document.getElementById('tm-title').focus();
+        return;
+    }
+    document.getElementById('tm-title').style.borderColor = '';
+    var dueRaw = document.getElementById('tm-due').value;
+    var payload = {
+        title:    title,
+        info:     document.getElementById('tm-info').value.trim(),
+        priority: document.getElementById('tm-prio').value,
+        due:      dueRaw ? Math.floor(new Date(dueRaw).getTime()/1000) : 0
+    };
+    var id = document.getElementById('tm-id').value;
+    if (id) {
+        payload.id = parseInt(id, 10);
+        tmPost('UpdateTask', payload);
     } else {
-      tmSend("AddTask", {title:title, info:info, priority:prio, due:due});
+        tmPost('AddTask', payload);
     }
-    tmCloseModal();
-  };
+    tmClose();
+}
 
-  window.tmDeleteFromModal = function() {
-    var editId = document.getElementById("tm-edit-id").value;
-    if (editId) { tmSend("DeleteTask", {id:parseInt(editId,10)}); tmCloseModal(); }
-  };
+function tmToggle(id, done) { tmPost('ToggleDone', {id:id, done:done}); }
+function tmDelete(id) { tmPost('DeleteTask', {id:id}); }
+function tmDeleteModal() {
+    var id = document.getElementById('tm-id').value;
+    if (id) { tmPost('DeleteTask', {id:parseInt(id,10)}); tmClose(); }
+}
 
-  document.addEventListener("keydown", function(e) {
-    var m = document.getElementById("tm-modal");
-    if (!m || !m.classList.contains("open")) return;
-    if (e.key === "Enter" && document.activeElement && document.activeElement.tagName !== "TEXTAREA") { e.preventDefault(); tmSaveModal(); }
-    if (e.key === "Escape") tmCloseModal();
-  });
-})();
-</script>';
+document.addEventListener('keydown', function(e) {
+    if (!document.getElementById('tm-modal').classList.contains('open')) return;
+    if (e.key === 'Escape') tmClose();
+    if (e.key === 'Enter' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault(); tmSave();
+    }
+});
+JS;
     }
 
     private function BuildCss(bool $Dark): string
     {
-        if ($Dark) {
-            $v = '--bg:#1e1f23;--card:#2a2b30;--text:#f0f0f0;--muted:rgba(240,240,240,.45);--border:rgba(255,255,255,.10);--accent:#00cdab;--red:#ff5a5a;--orange:#ffaa40;--shadow:rgba(0,0,0,.45);--modal:#23242a;--inp:#1a1b1f;--overlay:rgba(0,0,0,.65);';
-        } else {
-            $v = '--bg:#f4f5f7;--card:#fff;--text:#1a1a2e;--muted:rgba(26,26,46,.45);--border:rgba(0,0,0,.10);--accent:#00897b;--red:#d32f2f;--orange:#e65100;--shadow:rgba(0,0,0,.12);--modal:#fff;--inp:#f4f5f7;--overlay:rgba(0,0,0,.40);';
-        }
-        return 'body{margin:0;padding:8px;box-sizing:border-box;background:transparent;}
-.tm-wrap{' . $v . 'display:flex;flex-direction:column;gap:8px;font-family:"Segoe UI",system-ui,sans-serif;font-size:14px;color:var(--text);}
-.tm-stats{display:flex;gap:8px;margin-bottom:4px;}
-.tm-stat{flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 6px;text-align:center;}
-.tm-stat-val{font-size:26px;font-weight:800;line-height:1;}
-.tm-stat-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-top:4px;}
-.tm-stat-open .tm-stat-val{color:var(--accent);}
-.tm-stat-overdue .tm-stat-val{color:var(--red);}
-.tm-stat-today .tm-stat-val{color:var(--orange);}
-.tm-add-bar{margin-bottom:4px;}
-.tm-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;border:1px solid var(--border);padding:9px 16px;font-size:13px;font-weight:600;background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap;font-family:inherit;}
-.tm-btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;}
-.tm-btn-danger{background:var(--red);border-color:var(--red);color:#fff;}
-.tm-btn-full{width:100%;box-sizing:border-box;}
-.tm-item{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;}
-.tm-item.tm-done{opacity:.5;}
-.tm-item-left{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:2px;flex-shrink:0;}
-.tm-chk{width:18px;height:18px;cursor:pointer;accent-color:var(--accent);}
-.tm-prio-dot{width:8px;height:8px;border-radius:50%;}
-.tm-prio-dot.tm-prio-high{background:var(--red);}
-.tm-prio-dot.tm-prio-normal{background:var(--accent);}
-.tm-prio-dot.tm-prio-low{background:var(--muted);}
-.tm-item-body{flex:1;min-width:0;cursor:pointer;}
-.tm-title{font-weight:700;line-height:1.3;word-break:break-word;}
+        $v = $Dark
+            ? '--bg:#18191d;--card:#24252b;--text:#f0f0f0;--muted:rgba(240,240,240,.4);--border:rgba(255,255,255,.09);--accent:#00cdab;--red:#ff5a5a;--orange:#ffaa40;--sh:rgba(0,0,0,.5);--modal:#1e1f24;--inp:#14151a;--ov:rgba(0,0,0,.7);'
+            : '--bg:#f0f2f5;--card:#fff;--text:#1a1a2e;--muted:rgba(26,26,46,.4);--border:rgba(0,0,0,.09);--accent:#00897b;--red:#d32f2f;--orange:#e65100;--sh:rgba(0,0,0,.1);--modal:#fff;--inp:#f0f2f5;--ov:rgba(0,0,0,.4);';
+
+        return ':root{'.\$v.'}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;font-size:14px;padding:10px;}
+.tm-wrap{display:flex;flex-direction:column;gap:7px;}
+
+/* Stats */
+.tm-stats{display:flex;gap:8px;margin-bottom:2px;}
+.tm-stat{flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 4px;text-align:center;}
+.tm-val{font-size:24px;font-weight:800;line-height:1;}
+.tm-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:3px;}
+.tm-open .tm-val{color:var(--accent);}
+.tm-overdue .tm-val{color:var(--red);}
+.tm-today .tm-val{color:var(--orange);}
+
+/* Buttons */
+.tm-btn{display:inline-flex;align-items:center;justify-content:center;border-radius:9px;border:1px solid var(--border);padding:8px 14px;font-size:13px;font-weight:600;background:var(--card);color:var(--text);cursor:pointer;font-family:inherit;white-space:nowrap;}
+.tm-btn-add{width:100%;background:var(--accent);border-color:var(--accent);color:#fff;padding:10px;}
+.tm-btn-save{background:var(--accent);border-color:var(--accent);color:#fff;}
+.tm-btn-del{background:var(--red);border-color:var(--red);color:#fff;}
+
+/* Rows */
+.tm-row{display:flex;align-items:flex-start;gap:9px;background:var(--card);border:1px solid var(--border);border-radius:11px;padding:11px;}
+.tm-row.tm-done{opacity:.45;}
+.tm-chk{width:18px;height:18px;margin-top:2px;flex-shrink:0;cursor:pointer;accent-color:var(--accent);}
+.tm-body{flex:1;min-width:0;cursor:pointer;}
+.tm-title{font-weight:700;line-height:1.35;word-break:break-word;}
 .tm-done .tm-title{text-decoration:line-through;}
-.tm-info{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.4;}
-.tm-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
-.tm-badge{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);}
-.tm-badge.tm-badge-high{border-color:var(--red);color:var(--red);background:rgba(255,90,90,.15);}
-.tm-badge.tm-badge-normal{border-color:var(--accent);color:var(--accent);background:rgba(0,205,171,.15);}
-.tm-badge.tm-badge-low{border-color:var(--muted);color:var(--muted);}
-.tm-due-badge.tm-due-overdue{border-color:var(--red);color:var(--red);background:rgba(255,90,90,.15);}
-.tm-due-badge.tm-due-today{border-color:var(--orange);color:var(--orange);background:rgba(255,170,64,.15);}
-.tm-item-del{flex-shrink:0;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:6px;}
-.tm-item-del:hover{color:var(--red);}
-.tm-section-header{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:8px 4px 2px;}
-.tm-empty{text-align:center;color:var(--muted);padding:24px 16px;font-size:13px;}
-.tm-backdrop{display:none;position:fixed;inset:0;background:var(--overlay);z-index:9000;}
-.tm-backdrop.open{display:block;}
-.tm-modal{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 48px);background:var(--modal);border:1px solid var(--border);border-radius:16px;box-shadow:0 8px 40px var(--shadow);z-index:9100;flex-direction:column;overflow:hidden;}
+.tm-info{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;word-break:break-word;}
+.tm-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
+.tm-badge{font-size:11px;padding:2px 7px;border-radius:999px;border:1px solid var(--border);color:var(--muted);}
+.tm-p-high{border-color:var(--red);color:var(--red);background:rgba(255,90,90,.12);}
+.tm-p-normal{border-color:var(--accent);color:var(--accent);background:rgba(0,205,171,.12);}
+.tm-p-low{border-color:var(--muted);color:var(--muted);}
+.tm-due.tm-overdue{border-color:var(--red);color:var(--red);background:rgba(255,90,90,.12);}
+.tm-due.tm-today{border-color:var(--orange);color:var(--orange);background:rgba(255,170,64,.12);}
+.tm-del{flex-shrink:0;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 3px;border-radius:5px;line-height:1;}
+.tm-del:hover{color:var(--red);}
+.tm-divider{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);padding:6px 2px 2px;}
+.tm-empty{text-align:center;color:var(--muted);padding:20px;font-size:13px;}
+
+/* Modal */
+.tm-overlay{display:none;position:fixed;inset:0;background:var(--ov);z-index:100;}
+.tm-overlay.open{display:block;}
+.tm-modal{display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(400px,calc(100vw - 24px));max-height:90vh;background:var(--modal);
+  border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 32px var(--sh);
+  z-index:101;flex-direction:column;overflow:hidden;}
 .tm-modal.open{display:flex;}
-.tm-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid var(--border);font-weight:700;font-size:15px;}
-.tm-modal-close{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0 2px;}
-.tm-modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
-.tm-modal-footer{display:flex;gap:8px;padding:12px 18px 16px;border-top:1px solid var(--border);justify-content:flex-end;}
-.tm-field{display:flex;flex-direction:column;gap:5px;}
-.tm-field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.tm-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
-.tm-input{background:var(--inp);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;color:var(--text);outline:none;width:100%;box-sizing:border-box;font-family:inherit;}
+.tm-mhead{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px 10px;border-bottom:1px solid var(--border);font-weight:700;font-size:15px;}
+.tm-mclose{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:15px;}
+.tm-mbody{padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;}
+.tm-mfoot{display:flex;gap:7px;padding:10px 16px 14px;border-top:1px solid var(--border);justify-content:flex-end;}
+.tm-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:block;margin-bottom:3px;}
+.tm-input{background:var(--inp);border:1px solid var(--border);border-radius:7px;
+  padding:8px 10px;font-size:13px;color:var(--text);outline:none;width:100%;
+  font-family:inherit;transition:border-color .15s;}
 .tm-input:focus{border-color:var(--accent);}
-.tm-textarea{resize:vertical;min-height:64px;line-height:1.4;}';
+.tm-ta{resize:vertical;min-height:60px;line-height:1.4;}
+
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private function HookUrl(): string
+    {
+        return '/hook/taskmanager_' . $this->InstanceID;
+    }
+
+    private function RegisterHook()
+    {
+        $ids = IPS_GetInstanceListByModuleID('{015A6EB8-D6E5-4B93-B496-0D3F77AE9FE1}');
+        if (empty($ids)) {
+            IPS_LogMessage('TaskManager', 'Kein WebHook-Control gefunden!');
+            return;
+        }
+        $hookId  = $ids[0];
+        $uri     = $this->HookUrl();
+        $hooks   = json_decode(IPS_GetProperty($hookId, 'Hooks'), true);
+        if (!is_array($hooks)) {
+            $hooks = [];
+        }
+        foreach ($hooks as $h) {
+            if ($h['Hook'] === $uri && (int)$h['TargetID'] === $this->InstanceID) {
+                return; // bereits registriert
+            }
+        }
+        $hooks[] = ['Hook' => $uri, 'TargetID' => $this->InstanceID];
+        IPS_SetProperty($hookId, 'Hooks', json_encode($hooks));
+        IPS_ApplyChanges($hookId);
+        IPS_LogMessage('TaskManager', 'WebHook registriert: ' . $uri);
     }
 
     private function LoadTasks(): array
@@ -496,10 +606,13 @@ class TaskManager extends IPSModule
 
     private function SaveTasks(array $Tasks)
     {
-        $this->WriteAttributeString('Tasks', json_encode(array_values($Tasks), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $this->WriteAttributeString(
+            'Tasks',
+            json_encode(array_values($Tasks), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
     }
 
-    private function ValidatePriority(string $P): string
+    private function ValidPrio(string $P): string
     {
         return in_array($P, ['low', 'normal', 'high'], true) ? $P : 'normal';
     }
@@ -507,7 +620,7 @@ class TaskManager extends IPSModule
     private function SortScore(array $T): int
     {
         $map = ['high' => 0, 'normal' => 1000, 'low' => 2000];
-        $s   = isset($map[$T['priority']]) ? $map[$T['priority']] : 1000;
+        $s   = $map[$T['priority']] ?? 1000;
         $due = (int)($T['due'] ?? 0);
         return $due > 0 ? $s + ($due % 100000) : $s + 99999;
     }

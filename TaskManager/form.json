@@ -2,15 +2,12 @@
   "elements": [
     {
       "type": "Label",
-      "caption": "Task Manager – IPS View"
+      "caption": "Task Manager – Einstellungen"
     },
     {
-      "type": "NumberSpinner",
-      "name": "MaxCompletedVisible",
-      "caption": "Max. abgeschlossene Aufgaben anzeigen",
-      "minimum": 0,
-      "maximum": 100,
-      "suffix": "Stück"
+      "type": "CheckBox",
+      "name": "DarkMode",
+      "caption": "Dunkles Design"
     },
     {
       "type": "CheckBox",
@@ -18,26 +15,23 @@
       "caption": "Statistik-Leiste anzeigen"
     },
     {
-      "type": "CheckBox",
-      "name": "ShowPriority",
-      "caption": "Priorität anzeigen"
-    },
-    {
-      "type": "CheckBox",
-      "name": "ShowDueDate",
-      "caption": "Fälligkeitsdatum anzeigen"
-    },
-    {
-      "type": "CheckBox",
-      "name": "DarkMode",
-      "caption": "Dunkles Design"
+      "type": "NumberSpinner",
+      "name": "MaxCompletedVisible",
+      "caption": "Max. erledigte Aufgaben anzeigen",
+      "minimum": 0,
+      "maximum": 100
     }
   ],
   "actions": [
     {
       "type": "Button",
-      "caption": "Alle erledigten Aufgaben löschen",
+      "caption": "Alle erledigten löschen",
       "onClick": "TM_DeleteAllCompleted($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Ansicht aktualisieren",
+      "onClick": "TM_Refresh($id);"
     }
   ],
   "status": []

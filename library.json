@@ -1,12 +1,12 @@
 {
   "id": "{C4E7F2A1-3B9D-4E8C-A6F5-2D1E0B7C9A3F}",
-  "author": "Hagi",
+  "author": "Custom",
   "name": "Task Manager",
   "url": "",
   "compatibility": {
     "version": "8.0"
   },
-  "version": "1.0",
-  "build": 1,
+  "version": "1.1",
+  "build": 2,
   "date": 0
 }
