@@ -26,10 +26,22 @@
       "name": "FontSize",
       "caption": "Schriftgröße",
       "options": [
-        { "caption": "Klein (12px)",     "value": 12 },
-        { "caption": "Normal (14px)",    "value": 14 },
-        { "caption": "Groß (16px)",      "value": 16 },
-        { "caption": "Sehr groß (18px)", "value": 18 }
+        {
+          "caption": "Klein (12px)",
+          "value": 12
+        },
+        {
+          "caption": "Normal (14px)",
+          "value": 14
+        },
+        {
+          "caption": "Groß (16px)",
+          "value": 16
+        },
+        {
+          "caption": "Sehr groß (18px)",
+          "value": 18
+        }
       ]
     },
     {
@@ -93,7 +105,8 @@
           "edit": {
             "type": "SelectModule",
             "moduleID": "{2C247671-7083-4E4D-8F24-38A5D90B5E89}"
-          }
+          },
+          "add": 0
         },
         {
           "caption": "Name",
@@ -101,7 +114,8 @@
           "width": "auto",
           "edit": {
             "type": "ValidationTextBox"
-          }
+          },
+          "add": ""
         }
       ],
       "values": []
