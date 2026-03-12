@@ -101,10 +101,9 @@
         {
           "caption": "Instanz-ID",
           "name": "InstanceID",
-          "width": "150px",
+          "width": "250px",
           "edit": {
-            "type": "SelectModule",
-            "moduleID": "{2C247671-7083-4E4D-8F24-38A5D90B5E89}"
+            "type": "SelectInstance"
           },
           "add": 0
         },
