@@ -1,0 +1,150 @@
+{
+  "elements": [
+    {
+      "type": "Label",
+      "caption": "Task Manager – Einstellungen"
+    },
+    {
+      "type": "CheckBox",
+      "name": "DarkMode",
+      "caption": "Dunkles Design"
+    },
+    {
+      "type": "CheckBox",
+      "name": "ShowStats",
+      "caption": "Statistik-Leiste anzeigen"
+    },
+    {
+      "type": "NumberSpinner",
+      "name": "MaxCompletedVisible",
+      "caption": "Max. erledigte Aufgaben anzeigen",
+      "minimum": 0,
+      "maximum": 100
+    },
+    {
+      "type": "Select",
+      "name": "FontSize",
+      "caption": "Schriftgröße",
+      "options": [
+        {
+          "caption": "Klein (12px)",
+          "value": 12
+        },
+        {
+          "caption": "Normal (14px)",
+          "value": 14
+        },
+        {
+          "caption": "Groß (16px)",
+          "value": 16
+        },
+        {
+          "caption": "Sehr groß (18px)",
+          "value": 18
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "caption": " "
+    },
+    {
+      "type": "Label",
+      "caption": "── Benachrichtigungen ──────────────────────"
+    },
+    {
+      "type": "CheckBox",
+      "name": "NotifyOnAdd",
+      "caption": "Benachrichtigung bei neuer Aufgabe"
+    },
+    {
+      "type": "CheckBox",
+      "name": "NotifyOnUpdate",
+      "caption": "Benachrichtigung bei Änderung einer Aufgabe"
+    },
+    {
+      "type": "CheckBox",
+      "name": "NotifyOnDone",
+      "caption": "Benachrichtigung wenn Aufgabe erledigt"
+    },
+    {
+      "type": "Label",
+      "caption": "Nachrichtentext (Platzhalter: {title}, {priority}, {due})"
+    },
+    {
+      "type": "ValidationTextBox",
+      "name": "NotifyTextAdd",
+      "caption": "Text bei neuer Aufgabe"
+    },
+    {
+      "type": "ValidationTextBox",
+      "name": "NotifyTextUpdate",
+      "caption": "Text bei Änderung"
+    },
+    {
+      "type": "ValidationTextBox",
+      "name": "NotifyTextDone",
+      "caption": "Text bei Erledigt"
+    },
+    {
+      "type": "Label",
+      "caption": "Notification Center Instanz"
+    },
+    {
+      "type": "SelectInstance",
+      "name": "NotificationInstance",
+      "caption": "Notification Center Instanz"
+    },
+    {
+      "type": "Label",
+      "caption": "Ziel-WebFronts / IPS View (ID der View-Instanz)"
+    },
+    {
+      "type": "List",
+      "name": "NotifyTargets",
+      "caption": "Empfänger",
+      "rowCount": 5,
+      "add": true,
+      "delete": true,
+      "columns": [
+        {
+          "caption": "WebFront/View ID",
+          "name": "TargetID",
+          "width": "160px",
+          "add": 0,
+          "edit": {
+            "type": "NumberSpinner",
+            "minimum": 0
+          }
+        },
+        {
+          "caption": "Bezeichnung",
+          "name": "Label",
+          "width": "auto",
+          "add": "",
+          "edit": {
+            "type": "ValidationTextBox"
+          }
+        }
+      ],
+      "values": []
+    },
+    {
+      "type": "Label",
+      "caption": "Empfänger (IPS View Instanzen)"
+    }
+  ],
+  "actions": [
+    {
+      "type": "Button",
+      "caption": "Alle erledigten löschen",
+      "onClick": "TM_DeleteAllCompleted($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Ansicht aktualisieren",
+      "onClick": "TM_Refresh($id);"
+    }
+  ],
+  "status": []
+}
