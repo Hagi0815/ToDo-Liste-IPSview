@@ -520,6 +520,7 @@ class TaskManager extends IPSModule
                 $textTemplate = (string)$this->ReadPropertyString('NotifyTextDone');
                 break;
         }
+        IPS_LogMessage('TaskManager', 'SendNotification type=' . $type . ' enabled=' . ($enabled ? 'true' : 'false'));
         if (!$enabled) return;
 
         // Platzhalter ersetzen
@@ -549,7 +550,8 @@ class TaskManager extends IPSModule
             $targetId = (int)(isset($target['TargetID']) ? $target['TargetID'] : 0);
             if ($targetId <= 0) continue;
             try {
-                NC_PushNotification($ncId, $targetId, 'Task Manager', $text, '', 0);
+                IPS_LogMessage('TaskManager', 'Sende Push an ncId=' . $ncId . ' targetId=' . $targetId . ' text=' . $text);
+                NC_PushNotification($ncId, $targetId, 'Task Manager', $text, '');
             } catch (Exception $e) {
                 IPS_LogMessage('TaskManager', 'Push fehlgeschlagen fuer ' . $targetId . ': ' . $e->getMessage());
             }
