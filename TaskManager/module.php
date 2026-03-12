@@ -13,13 +13,14 @@ class TaskManager extends IPSModule
         $this->RegisterPropertyInteger('FontSize', 14);
 
         // Benachrichtigungen
+        $this->RegisterPropertyInteger('NotificationInstance', 0);
         $this->RegisterPropertyBoolean('NotifyOnAdd',    true);
         $this->RegisterPropertyBoolean('NotifyOnUpdate', false);
         $this->RegisterPropertyBoolean('NotifyOnDone',   false);
         $this->RegisterPropertyString('NotifyTextAdd',    'Neue Aufgabe: {title}');
         $this->RegisterPropertyString('NotifyTextUpdate', 'Aufgabe geaendert: {title}');
         $this->RegisterPropertyString('NotifyTextDone',   'Aufgabe erledigt: {title}');
-        $this->RegisterPropertyString('NotifyTargets',    '[]');
+        $this->RegisterPropertyString('NotifyTargets', '[]');
         $this->RegisterVariableString('TasksJson', 'Aufgaben JSON', '', 1);
         $this->RegisterVariableString('HtmlBox', 'Aufgabenliste', '~HTMLBox', 2);
         $this->RegisterVariableInteger('OpenTasks', 'Offene Aufgaben', '', 3);
@@ -519,11 +520,10 @@ class TaskManager extends IPSModule
                 $textTemplate = (string)$this->ReadPropertyString('NotifyTextDone');
                 break;
         }
-
         if (!$enabled) return;
 
         // Platzhalter ersetzen
-        $title    = (string)(isset($task['title']) ? $task['title'] : '');
+        $title    = (string)(isset($task['title'])    ? $task['title']    : '');
         $priority = (string)(isset($task['priority']) ? $task['priority'] : 'normal');
         $prioMap  = array('low' => 'Niedrig', 'normal' => 'Normal', 'high' => 'Hoch');
         $prioText = isset($prioMap[$priority]) ? $prioMap[$priority] : 'Normal';
@@ -536,20 +536,22 @@ class TaskManager extends IPSModule
             $textTemplate
         );
 
-        // An alle Ziel-Instanzen senden
+        $ncId = (int)$this->ReadPropertyInteger('NotificationInstance');
+        if ($ncId <= 0 || !IPS_InstanceExists($ncId)) {
+            IPS_LogMessage('TaskManager', 'Kein Notification Center konfiguriert!');
+            return;
+        }
+
         $targets = json_decode($this->ReadPropertyString('NotifyTargets'), true);
         if (!is_array($targets)) return;
 
         foreach ($targets as $target) {
-            $instanceId = (int)(isset($target['InstanceID']) ? $target['InstanceID'] : 0);
-            if ($instanceId <= 0) continue;
+            $targetId = (int)(isset($target['TargetID']) ? $target['TargetID'] : 0);
+            if ($targetId <= 0) continue;
             try {
-                // IPS View Nachricht senden via WFC_PushNotification
-                if (IPS_InstanceExists($instanceId)) {
-                    WFC_PushNotification($instanceId, 'Task Manager', $text, '', 0);
-                }
+                NC_PushNotification($ncId, $targetId, 'Task Manager', $text, '', 0);
             } catch (Exception $e) {
-                IPS_LogMessage('TaskManager', 'Benachrichtigung fehlgeschlagen fuer Instanz ' . $instanceId . ': ' . $e->getMessage());
+                IPS_LogMessage('TaskManager', 'Push fehlgeschlagen fuer ' . $targetId . ': ' . $e->getMessage());
             }
         }
     }

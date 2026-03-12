@@ -88,36 +88,50 @@
     },
     {
       "type": "Label",
-      "caption": "Empfänger (IPS View Instanzen)"
+      "caption": "Notification Center Instanz"
+    },
+    {
+      "type": "SelectInstance",
+      "name": "NotificationInstance",
+      "caption": "Notification Center Instanz"
+    },
+    {
+      "type": "Label",
+      "caption": "Ziel-WebFronts / IPS View (ID der View-Instanz)"
     },
     {
       "type": "List",
       "name": "NotifyTargets",
-      "caption": "Ziel-Instanzen",
+      "caption": "Empfänger",
       "rowCount": 5,
       "add": true,
       "delete": true,
       "columns": [
         {
-          "caption": "Instanz-ID",
-          "name": "InstanceID",
-          "width": "250px",
+          "caption": "WebFront/View ID",
+          "name": "TargetID",
+          "width": "160px",
+          "add": 0,
           "edit": {
-            "type": "SelectInstance"
-          },
-          "add": 0
+            "type": "NumberSpinner",
+            "minimum": 0
+          }
         },
         {
-          "caption": "Name",
+          "caption": "Bezeichnung",
           "name": "Label",
           "width": "auto",
+          "add": "",
           "edit": {
             "type": "ValidationTextBox"
-          },
-          "add": ""
+          }
         }
       ],
       "values": []
+    },
+    {
+      "type": "Label",
+      "caption": "Empfänger (IPS View Instanzen)"
     }
   ],
   "actions": [
