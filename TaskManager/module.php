@@ -14,12 +14,11 @@ class TaskManager extends IPSModule
 
         // Benachrichtigungen
         $this->RegisterPropertyInteger('NotificationInstance', 0);
-        $this->RegisterPropertyBoolean('NotifyOnAdd',    true);
-        $this->RegisterPropertyBoolean('NotifyOnUpdate', false);
-        $this->RegisterPropertyBoolean('NotifyOnDone',   false);
+        $this->RegisterPropertyBoolean('NotifyEnabled', true);
         $this->RegisterPropertyString('NotifyTextAdd',    'Neue Aufgabe: {title}');
         $this->RegisterPropertyString('NotifyTextUpdate', 'Aufgabe geaendert: {title}');
         $this->RegisterPropertyString('NotifyTextDone',   'Aufgabe erledigt: {title}');
+        $this->RegisterPropertyString('NotifyTextDelete', 'Aufgabe geloescht: {title}');
         $this->RegisterPropertyString('NotifyTargets', '[]');
         $this->RegisterVariableString('TasksJson', 'Aufgaben JSON', '', 1);
         $this->RegisterVariableString('HtmlBox', 'Aufgabenliste', '~HTMLBox', 2);
@@ -96,6 +95,14 @@ class TaskManager extends IPSModule
                 }
                 break;
             case 'DeleteTask':
+                $delId = (int)(isset($payload['id']) ? $payload['id'] : -1);
+                $tasks = $this->LoadTasks();
+                foreach ($tasks as $t) {
+                    if ((int)$t['id'] === $delId) {
+                        $this->SendNotification('delete', $t);
+                        break;
+                    }
+                }
                 $this->DeleteTask($payload);
                 break;
             case 'DeleteAllCompleted':
@@ -504,24 +511,15 @@ class TaskManager extends IPSModule
 
     private function SendNotification($type, $task)
     {
-        $enabled = false;
-        $textTemplate = '';
-        switch ($type) {
-            case 'add':
-                $enabled = (bool)$this->ReadPropertyBoolean('NotifyOnAdd');
-                $textTemplate = (string)$this->ReadPropertyString('NotifyTextAdd');
-                break;
-            case 'update':
-                $enabled = (bool)$this->ReadPropertyBoolean('NotifyOnUpdate');
-                $textTemplate = (string)$this->ReadPropertyString('NotifyTextUpdate');
-                break;
-            case 'done':
-                $enabled = (bool)$this->ReadPropertyBoolean('NotifyOnDone');
-                $textTemplate = (string)$this->ReadPropertyString('NotifyTextDone');
-                break;
-        }
-        IPS_LogMessage('TaskManager', 'SendNotification type=' . $type . ' enabled=' . ($enabled ? 'true' : 'false'));
-        if (!$enabled) return;
+        if (!(bool)$this->ReadPropertyBoolean('NotifyEnabled')) return;
+        $textMap = array(
+            'add'    => (string)$this->ReadPropertyString('NotifyTextAdd'),
+            'update' => (string)$this->ReadPropertyString('NotifyTextUpdate'),
+            'done'   => (string)$this->ReadPropertyString('NotifyTextDone'),
+            'delete' => (string)$this->ReadPropertyString('NotifyTextDelete'),
+        );
+        $textTemplate = isset($textMap[$type]) ? $textMap[$type] : '';
+        if ($textTemplate === '') return;
 
         // Platzhalter ersetzen
         $title    = (string)(isset($task['title'])    ? $task['title']    : '');

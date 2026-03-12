@@ -54,18 +54,8 @@
     },
     {
       "type": "CheckBox",
-      "name": "NotifyOnAdd",
-      "caption": "Benachrichtigung bei neuer Aufgabe"
-    },
-    {
-      "type": "CheckBox",
-      "name": "NotifyOnUpdate",
-      "caption": "Benachrichtigung bei Änderung einer Aufgabe"
-    },
-    {
-      "type": "CheckBox",
-      "name": "NotifyOnDone",
-      "caption": "Benachrichtigung wenn Aufgabe erledigt"
+      "name": "NotifyEnabled",
+      "caption": "Push-Benachrichtigungen aktivieren"
     },
     {
       "type": "Label",
@@ -85,6 +75,11 @@
       "type": "ValidationTextBox",
       "name": "NotifyTextDone",
       "caption": "Text bei Erledigt"
+    },
+    {
+      "type": "ValidationTextBox",
+      "name": "NotifyTextDelete",
+      "caption": "Text bei Löschen"
     },
     {
       "type": "Label",
