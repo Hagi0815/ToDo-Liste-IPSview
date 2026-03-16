@@ -103,13 +103,12 @@
       "delete": true,
       "columns": [
         {
-          "caption": "WebFront/View ID",
+          "caption": "WebFront Instanz",
           "name": "TargetID",
-          "width": "160px",
+          "width": "250px",
           "add": 0,
           "edit": {
-            "type": "NumberSpinner",
-            "minimum": 0
+            "type": "SelectInstance"
           }
         },
         {
