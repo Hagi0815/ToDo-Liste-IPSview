@@ -1,7 +1,7 @@
 # Task Manager für IP-Symcon
 
 **Autor:** Hagi  
-**Version:** 3.4  
+**Version:** 1.0  
 **Kompatibilität:** IP-Symcon ab Version 8.0  
 **GitHub:** https://github.com/Hagi0815/Todo-Liste-IPSview
 
