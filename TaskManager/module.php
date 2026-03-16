@@ -29,33 +29,7 @@ class TaskManager extends IPSModule
     {
         parent::ApplyChanges();
         $this->RegisterHook();
-        $this->MigrateFromAttributes();
         $this->Refresh();
-    }
-
-    private function MigrateFromAttributes()
-    {
-        // Einmalige Migration: falls noch Daten im Attribut liegen, in Variable uebertragen
-        try {
-            $old = $this->ReadAttributeString('Tasks');
-            if ($old !== '' && $old !== '[]') {
-                $data = json_decode($old, true);
-                if (is_array($data) && count($data) > 0) {
-                    $varId = @IPS_GetObjectIDByIdent('TasksJson', $this->InstanceID);
-                    if ($varId > 0) {
-                        $current = json_decode(GetValue($varId), true);
-                        // Nur migrieren wenn Variable noch leer ist
-                        if (!is_array($current) || count($current) === 0) {
-                            SetValue($varId, json_encode(array_values($data)));
-                            IPS_LogMessage('TaskManager', 'Migration: ' . count($data) . ' Aufgaben aus Attribut uebertragen');
-                        }
-                    }
-                    $this->WriteAttributeString('Tasks', '');
-                }
-            }
-        } catch (Exception $e) {
-            // Attribut existiert nicht mehr - kein Problem
-        }
     }
 
     public function ProcessHookData()
