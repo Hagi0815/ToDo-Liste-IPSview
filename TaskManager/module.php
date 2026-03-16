@@ -5,8 +5,6 @@ class TaskManager extends IPSModule
     public function Create()
     {
         parent::Create();
-        $this->RegisterAttributeString('Tasks', '[]');
-        $this->RegisterAttributeInteger('NextID', 1);
         $this->RegisterPropertyBoolean('DarkMode', true);
         $this->RegisterPropertyBoolean('ShowStats', true);
         $this->RegisterPropertyInteger('MaxCompletedVisible', 10);
@@ -31,7 +29,33 @@ class TaskManager extends IPSModule
     {
         parent::ApplyChanges();
         $this->RegisterHook();
+        $this->MigrateFromAttributes();
         $this->Refresh();
+    }
+
+    private function MigrateFromAttributes()
+    {
+        // Einmalige Migration: falls noch Daten im Attribut liegen, in Variable uebertragen
+        try {
+            $old = $this->ReadAttributeString('Tasks');
+            if ($old !== '' && $old !== '[]') {
+                $data = json_decode($old, true);
+                if (is_array($data) && count($data) > 0) {
+                    $varId = @IPS_GetObjectIDByIdent('TasksJson', $this->InstanceID);
+                    if ($varId > 0) {
+                        $current = json_decode(GetValue($varId), true);
+                        // Nur migrieren wenn Variable noch leer ist
+                        if (!is_array($current) || count($current) === 0) {
+                            SetValue($varId, json_encode(array_values($data)));
+                            IPS_LogMessage('TaskManager', 'Migration: ' . count($data) . ' Aufgaben aus Attribut uebertragen');
+                        }
+                    }
+                    $this->WriteAttributeString('Tasks', '');
+                }
+            }
+        } catch (Exception $e) {
+            // Attribut existiert nicht mehr - kein Problem
+        }
     }
 
     public function ProcessHookData()
@@ -143,8 +167,11 @@ class TaskManager extends IPSModule
     private function AddTask($Data)
     {
         $tasks = $this->LoadTasks();
-        $id = $this->ReadAttributeInteger('NextID');
-        $this->WriteAttributeInteger('NextID', $id + 1);
+        $existing = $this->LoadTasks();
+        $id = 1;
+        foreach ($existing as $t) {
+            if ((int)$t['id'] >= $id) $id = (int)$t['id'] + 1;
+        }
         $tasks[] = array(
             'id'        => $id,
             'title'     => trim((string)isset($Data['title']) ? $Data['title'] : ''),
@@ -566,13 +593,19 @@ class TaskManager extends IPSModule
 
     private function LoadTasks()
     {
-        $data = json_decode($this->ReadAttributeString('Tasks'), true);
+        $varId = @IPS_GetObjectIDByIdent('TasksJson', $this->InstanceID);
+        if ($varId === false || $varId <= 0) return array();
+        $raw = GetValue($varId);
+        $data = json_decode((string)$raw, true);
         return is_array($data) ? $data : array();
     }
 
     private function SaveTasks($tasks)
     {
-        $this->WriteAttributeString('Tasks', json_encode(array_values($tasks)));
+        $varId = @IPS_GetObjectIDByIdent('TasksJson', $this->InstanceID);
+        if ($varId > 0) {
+            SetValue($varId, json_encode(array_values($tasks)));
+        }
     }
 
     private function ValidPrio($p)
