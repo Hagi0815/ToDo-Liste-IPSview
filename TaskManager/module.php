@@ -24,6 +24,7 @@ class TaskManager extends IPSModule
         $this->RegisterVariableString('HtmlBox', 'Aufgabenliste', '~HTMLBox', 2);
         $this->RegisterVariableInteger('OpenTasks', 'Offene Aufgaben', '', 3);
         $this->RegisterVariableInteger('OverdueTasks', 'Ueberfaellig', '', 4);
+        $this->RegisterVariableInteger('TodayTasks', 'Heute faellig', '', 5);
     }
 
     public function ApplyChanges()
@@ -237,15 +238,20 @@ class TaskManager extends IPSModule
         $now = time();
         $open = 0;
         $overdue = 0;
+        $today = 0;
+        $todayStart = mktime(0, 0, 0);
+        $todayEnd   = mktime(23, 59, 59);
         foreach ($tasks as $t) {
             if (!empty($t['done'])) continue;
             $open++;
             $due = (int)(isset($t['due']) ? $t['due'] : 0);
             if ($due > 0 && $due < $now) $overdue++;
+            if ($due >= $todayStart && $due <= $todayEnd) $today++;
         }
         $this->SetValue('TasksJson', json_encode($tasks));
         $this->SetValue('OpenTasks', $open);
         $this->SetValue('OverdueTasks', $overdue);
+        $this->SetValue('TodayTasks', $today);
         $hookUrl = $this->GetHookUrl();
         $cb = time(); // Cache-Buster: erzwingt Neu-Laden des iframe bei Aenderungen
         $iframe = '<iframe src="' . $hookUrl . '?v=' . $cb . '" style="width:100%;height:100%;border:none;min-height:600px;" frameborder="0"></iframe>';
