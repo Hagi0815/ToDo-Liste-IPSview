@@ -103,12 +103,12 @@
       "delete": true,
       "columns": [
         {
-          "caption": "WebFront Instanz",
+          "caption": "IPS View",
           "name": "TargetID",
           "width": "250px",
           "add": 0,
           "edit": {
-            "type": "SelectInstance"
+            "type": "SelectMedia"
           }
         },
         {
