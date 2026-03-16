@@ -1,7 +1,12 @@
 {
   "translations": {
+    "en": {
+      "Task Manager": "Task Manager",
+      "This should never be visible - No localised module name": "Task Manager"
+    },
     "de": {
-      "Task Manager": "Task Manager"
+      "Task Manager": "Task Manager",
+      "This should never be visible - No localised module name": "Task Manager"
     }
   }
 }

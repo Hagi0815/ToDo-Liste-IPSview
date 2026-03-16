@@ -321,6 +321,7 @@ class TaskManager extends IPSModule
             . '.stat span{display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:' . $muted . ';margin-top:3px}'
             . '.s-open b{color:' . $acc . '}.s-ov b{color:' . $red . '}.s-td b{color:' . $ora . '}'
             . '.add-btn{width:100%;background:' . $acc . ';color:#fff;border:none;border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}'
+            . '.del-all-btn{width:100%;background:transparent;color:' . $red . ';border:1px solid ' . $red . ';border-radius:9px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:0}'
             . '.row{display:flex;align-items:flex-start;gap:9px;background:' . $card . ';border:1px solid ' . $bord . ';border-radius:11px;padding:11px}'
             . '.row.done{opacity:.45}'
             . '.chk{width:18px;height:18px;margin-top:2px;flex-shrink:0;cursor:pointer;accent-color:' . $acc . '}'
@@ -441,6 +442,7 @@ class TaskManager extends IPSModule
             . '<style>' . $css . '</style></head><body>'
             . '<div class="wrap">' . $stats
             . '<button class="add-btn" onclick="openAdd()">+ Neue Aufgabe</button>'
+            . '<button class="del-all-btn" onclick="if(confirm(\'Alle erledigten Aufgaben loeschen?\'))post(\'DeleteAllCompleted\',{})">&#x1F5D1; Erledigte l&ouml;schen</button>'
             . $rows . '</div>'
             . $modal_html
             . '<script>' . $js . '</script>'

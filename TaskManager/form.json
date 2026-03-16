@@ -129,17 +129,6 @@
       "caption": "Empfänger (IPS View Instanzen)"
     }
   ],
-  "actions": [
-    {
-      "type": "Button",
-      "caption": "Alle erledigten löschen",
-      "onClick": "TM_DeleteAllCompleted($id);"
-    },
-    {
-      "type": "Button",
-      "caption": "Ansicht aktualisieren",
-      "onClick": "TM_Refresh($id);"
-    }
-  ],
+  "actions": [],
   "status": []
 }
