@@ -163,4 +163,4 @@ Das Modul registriert automatisch einen WebHook unter:
 
 ## Lizenz
 
-Frei verwendbar für private und kommerzielle Zwecke.
+Frei verwendbar für private Zwecke.
